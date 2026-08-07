@@ -25,6 +25,16 @@ app.use(session({
 // ── HealthSphere clinical app (authenticated) at /healthsphere ──
 app.use("/healthsphere", healthsphereRouter);
 
+// This service hosts two products: the Reva dashboard at / and the clinical app
+// at /healthsphere. On a deployment where only the clinical app is used, having
+// to type the path is friction — and the bare URL renders an unconfigured
+// dashboard, which reads as a broken deploy.
+//
+// Opt-in, so the default behaviour is unchanged for anyone using the dashboard.
+if (process.env.HS_ROOT_REDIRECT === "true") {
+  app.get("/", (_req, res) => res.redirect("/healthsphere"));
+}
+
 // Serve dashboard + static assets (also serves /healthsphere.css and /healthsphere/hs-app.jsx)
 app.use(express.static(path.join(__dirname, "../dashboard")));
 
