@@ -63,6 +63,10 @@ router.post("/api/agent/ask", apiGuard, async (req, res) => {
   const result = await invokeAgent({
     user, traceId, prompt: fullPrompt, actor,
     bearer: req.session.hsTokens && req.session.hsTokens.accessToken, // user's Cognito token → gateway inbound
+    // The ID token, not the access token, for the PDP. Cognito access tokens
+    // carry token_use:"access" and no user claims; ID tokens carry the claims
+    // an authorization service expects to identify a principal.
+    idToken: req.session.hsTokens && req.session.hsTokens.idToken,
   });
   var reply = (result.ok && result.text)
     ? result.text

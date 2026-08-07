@@ -62,7 +62,7 @@ function extractText(raw) {
   return out.trim();
 }
 
-async function invokeAgent({ user, traceId, target, prompt, bearer, actor }) {
+async function invokeAgent({ user, traceId, target, prompt, bearer, actor, idToken }) {
   // The LangGraph three-agent orchestration is deployed as AgentCore runtimes
   // rather than gateway targets, so there is no target name to route to. When
   // HS_SUPERVISOR_ARN is set, go straight to the supervisor and let it delegate
@@ -71,7 +71,7 @@ async function invokeAgent({ user, traceId, target, prompt, bearer, actor }) {
     // bearer is the signed-in user's access token. The Reva SDK reads the
     // principal claim from it, so the agent needs the token itself, not just
     // the actor fields derived from it.
-    return runtime.invokeSupervisor({ user, traceId, prompt, actor, bearer });
+    return runtime.invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken });
   }
 
   const t = target || gw.supervisorTarget;

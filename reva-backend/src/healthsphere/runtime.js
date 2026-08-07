@@ -54,7 +54,7 @@ function extractText(data) {
   return JSON.stringify(data);
 }
 
-async function invokeSupervisor({ user, traceId, prompt, actor, bearer }) {
+async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken }) {
   const sessionId = sessionIdFor(traceId, user);
 
   console.log("[CALL]  app -> agentcore runtime (direct)");
@@ -82,7 +82,7 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer }) {
             // The user's own access token. The Reva SDK's token-enrich call
             // reads the principal claim from this; without it the PDP has no
             // identity for the caller and returns 401.
-            user_token: bearer || "",
+            user_token: idToken || bearer || "",
           })
         ),
       })
