@@ -71,6 +71,11 @@ async function invokeSupervisor({ user, traceId, prompt, actor }) {
         payload: new TextEncoder().encode(
           JSON.stringify({
             input: { prompt: prompt || "" },
+            // The PDP keys User entities by Cognito `sub`, not email — email is
+            // only the topology's displayName. Sending the email matches no
+            // entity, which arrives as "denied by policy" rather than as an
+            // unknown principal.
+            actor_id: (user && user.sub) || "",
             actor_email: (actor && actor.email) || "",
             actor_name: (actor && actor.name) || "",
             actor_role: (actor && actor.role) || "",
