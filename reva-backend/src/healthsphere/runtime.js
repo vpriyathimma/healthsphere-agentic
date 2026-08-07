@@ -1,0 +1,94 @@
+// Direct AgentCore Runtime invocation — the LangGraph supervisor path.
+//
+// The existing seam in agent.js calls the gateway at {url}/{target}/invocations.
+// That still works and is untouched. This is an alternative destination for the
+// three-agent LangGraph orchestration, which is deployed as runtimes rather
+// than as gateway targets, so there is no target name to point at.
+//
+// Enabled by setting HS_SUPERVISOR_ARN. Unset, nothing here runs and the app
+// behaves exactly as before.
+//
+// The supervisor delegates to the records and admissions agents itself, inside
+// AWS. The app only ever talks to the supervisor — which is what makes the
+// sub-agent calls appear as agent-to-agent hops rather than as three separate
+// calls from the application.
+
+const { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } =
+  require("@aws-sdk/client-bedrock-agentcore");
+
+const REGION = process.env.AWS_REGION || "us-west-2";
+const SUPERVISOR_ARN = process.env.HS_SUPERVISOR_ARN || "";
+
+let _client = null;
+function client() {
+  if (!_client) _client = new BedrockAgentCoreClient({ region: REGION });
+  return _client;
+}
+
+function enabled() {
+  return Boolean(SUPERVISOR_ARN);
+}
+
+// AgentCore rejects session ids under 33 characters. Derive one from the trace
+// id so a conversation stays on the same runtime session, and pad if short.
+function sessionIdFor(traceId, user) {
+  let sid = `hs-${traceId || ""}-${(user && user.sub) || "anon"}`.replace(/[^a-zA-Z0-9_-]/g, "");
+  while (sid.length < 33) sid += "0";
+  return sid.slice(0, 64);
+}
+
+// The agent returns { output: { message, role } }. Unwrap defensively — a
+// changed shape should degrade to readable text, not to "[object Object]".
+function extractText(data) {
+  if (typeof data === "string") return data;
+  const out = (data && data.output) || data || {};
+  if (typeof out.message === "string") return out.message;
+  if (out.message && Array.isArray(out.message.content)) {
+    return out.message.content.map((p) => (p && p.text) || "").join("");
+  }
+  if (typeof out.text === "string") return out.text;
+  return JSON.stringify(data);
+}
+
+async function invokeSupervisor({ user, traceId, prompt, actor }) {
+  const sessionId = sessionIdFor(traceId, user);
+
+  console.log("[CALL]  app -> agentcore runtime (direct)");
+  console.log("        arn        : " + SUPERVISOR_ARN);
+  console.log("        session    : " + sessionId);
+  console.log("        actor      : " + ((actor && actor.name) || "-"));
+
+  try {
+    const res = await client().send(
+      new InvokeAgentRuntimeCommand({
+        agentRuntimeArn: SUPERVISOR_ARN,
+        runtimeSessionId: sessionId,
+        qualifier: "DEFAULT",
+        payload: new TextEncoder().encode(
+          JSON.stringify({
+            input: { prompt: prompt || "" },
+            actor_email: (actor && actor.email) || "",
+            actor_name: (actor && actor.name) || "",
+            actor_role: (actor && actor.role) || "",
+          })
+        ),
+      })
+    );
+
+    const raw = await new Response(res.response).text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      data = raw;
+    }
+    const text = extractText(data);
+    console.log("[RESP]  runtime -> app  bytes=" + raw.length);
+    return { ok: true, stub: false, traceId, target: "hs_supervisor", text, raw };
+  } catch (e) {
+    console.warn("[runtime] invoke failed: " + e.message);
+    return { ok: false, stub: false, traceId, target: "hs_supervisor", text: "", error: e.message };
+  }
+}
+
+module.exports = { enabled, invokeSupervisor };

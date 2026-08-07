@@ -1,0 +1,217 @@
+/* global React, ReactDOM */
+/* HealthSphere clinical workspace — single-page (state routing).
+   Global Copilot-style Care Assistant: opens a right-docked panel; the workspace
+   reflows beside it (no overlay). Free-text chat to the supervisor agent.
+   Clinical operations only — audit/forensics live in Reva Insights. */
+
+const { useState, useEffect, useRef } = React;
+
+const hsApi = {
+  async get(p) {
+    const r = await fetch(p, { credentials: "include" });
+    if (r.status === 401) { window.location.href = "/healthsphere/auth/login"; throw new Error("401"); }
+    if (!r.ok) throw new Error(r.status + " " + (await r.text()));
+    return r.json();
+  },
+  async post(p, body) {
+    const r = await fetch(p, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+    if (r.status === 401) { window.location.href = "/healthsphere/auth/login"; throw new Error("401"); }
+    if (!r.ok) throw new Error(r.status + " " + (await r.text()));
+    return r.json();
+  },
+  async logout() {
+    const { logoutUrl } = await this.post("/healthsphere/auth/logout");
+    window.location.href = logoutUrl;
+  },
+};
+
+const NAV = [
+  { id: "patients", label: "Patients", ico: "◉" },
+  { id: "orders", label: "Orders", ico: "℞" },
+  { id: "records", label: "Records", ico: "❐" },
+  { id: "admissions", label: "Admissions", ico: "⇄" },
+  { id: "tasks", label: "Tasks", ico: "✓" },
+];
+
+function Topbar({ user, assistantOpen, onToggleAssistant }) {
+  const c = user.clinician || {};
+  const context = [c.specialty, c.department].filter(Boolean).join(" · ") || "—";
+  return (
+    <div className="topbar">
+      <div className="brand"><span className="mark" />HealthSphere <small>Clinical Workspace</small></div>
+      <div className="who">
+        <button className={"assist-toggle" + (assistantOpen ? " on" : "")} onClick={onToggleAssistant}>
+          <span className="spark" />Care Assistant
+        </button>
+        <span className="persona">{user.persona}</span>
+        <div className="clin"><b>{user.name}</b><br /><span>{context}</span></div>
+        <button onClick={() => hsApi.logout()}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
+function Nav({ active, onNav }) {
+  return (
+    <nav className="nav">
+      <div className="group">Care</div>
+      {NAV.map((n) => (
+        <button key={n.id} className={"navlink" + (n.id === active ? " active" : "")} onClick={() => onNav(n.id)}>
+          <span>{n.ico}</span>{n.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Census({ onOpen }) {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { hsApi.get("/healthsphere/api/patients").then(setRows).catch(() => setRows([])); }, []);
+  return (
+    <div>
+      <div className="page-h">
+        <h1>Patient census</h1>
+        <span className="sub">{rows ? rows.length + " patients on your worklist" : "Loading…"}</span>
+      </div>
+      <div className="panel">
+        <table className="census">
+          <thead><tr><th>Patient</th><th>MRN</th><th>Ward</th><th>Service</th><th>Attending</th><th>HR</th><th>BP</th><th>SpO₂</th><th>Status</th></tr></thead>
+          <tbody>
+            {rows && rows.length === 0 && <tr><td colSpan="9" style={{ padding: 30, color: "#5b6b82" }}>No patients scoped to your role.</td></tr>}
+            {(rows || []).map((r) => (
+              <tr key={r.id} onClick={() => onOpen({ id: r.id, name: r.name })}>
+                <td className={"railcell " + r.status}><b>{r.name}</b></td>
+                <td className="mrn">{r.mrn}</td>
+                <td>{r.ward}</td>
+                <td>{r.service}</td>
+                <td>{r.attending}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.hr}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.bp}</td>
+                <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.spo2}%</td>
+                <td><span className={"pill " + r.status}>{r.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Chart({ patient, onBack }) {
+  const [p, setP] = useState(null);
+  useEffect(() => { hsApi.get("/healthsphere/api/patients/" + patient.id).then(setP); }, [patient.id]);
+  if (!p) return <div className="center">Loading chart…</div>;
+  return (
+    <div style={{ maxWidth: 920 }}>
+      <button className="back" onClick={onBack}>← Back to census</button>
+      <div className="page-h">
+        <div><h1>{p.name}</h1><span className="sub">{p.mrn} · {p.sex} · DOB {p.dob} · {p.ward} · {p.service}</span></div>
+        <span className={"pill " + p.status}>{p.status}</span>
+      </div>
+      <div className="card"><h3>Vitals</h3>
+        <div className="vitals">
+          <div className="vital"><div className="lbl">Heart rate</div><div className="val">{p.vitals.hr}</div></div>
+          <div className="vital"><div className="lbl">Blood pressure</div><div className="val">{p.vitals.bp}</div></div>
+          <div className="vital"><div className="lbl">SpO₂</div><div className="val">{p.vitals.spo2}%</div></div>
+          <div className="vital"><div className="lbl">Resp rate</div><div className="val">{p.vitals.rr}</div></div>
+          <div className="vital"><div className="lbl">Temp</div><div className="val">{p.vitals.temp}°</div></div>
+        </div>
+      </div>
+      <div className="card"><h3>Allergies</h3>
+        {p.allergies.length ? p.allergies.map((a) => <span key={a} className="allergy">{a}</span>) : <span className="sub">No known allergies</span>}
+      </div>
+      <div className="card"><h3>Encounters</h3>
+        {p.encounters.map((e) => <div className="row" key={e.id}><div><b>{e.type}</b><div className="sub">{e.note}</div></div><span className="mrn">{e.date}</span></div>)}
+      </div>
+      <div className="card"><h3>Orders</h3>
+        {p.orders.length ? p.orders.map((o) => <div className="row" key={o.id}><div><b>{o.kind}</b> — {o.detail}<div className="sub">by {o.by}</div></div><span className={"tag " + o.state}>{o.state}</span></div>) : <span className="sub">No active orders</span>}
+      </div>
+    </div>
+  );
+}
+
+function Assistant({ context, onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const threadRef = useRef(null);
+  useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [messages, busy]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setMessages((m) => m.concat({ role: "user", text }));
+    setInput(""); setBusy(true);
+    try {
+      const a = await hsApi.post("/healthsphere/api/agent/ask", { prompt: text, patientId: context ? context.id : null });
+      const reply = a.reply || "(no response)";
+      setMessages((m) => m.concat({ role: "assistant", text: reply }));
+    } catch (e) {
+      setMessages((m) => m.concat({ role: "assistant", text: "Error: " + e.message }));
+    } finally { setBusy(false); }
+  };
+  const onKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
+
+  return (
+    <aside className="assistant">
+      <div className="a-head">
+        <div className="a-title"><span className="mark" />Care Assistant</div>
+        <button className="a-close" onClick={onClose} title="Close">×</button>
+      </div>
+      <div className="a-ctx">
+        {context ? <span>In context: <b>{context.name}</b></span> : <span>No patient in context — open a chart to add one.</span>}
+      </div>
+      <div className="a-thread" ref={threadRef}>
+        {messages.length === 0 && <div className="a-empty">Ask about a patient, place an order, or request a discharge. Every action is traced end to end.</div>}
+        {messages.map((m, i) => (
+          <div key={i} className={"msg " + m.role}>
+            <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+          </div>
+        ))}
+        {busy && <div className="msg assistant typing"><span></span><span></span><span></span></div>}
+      </div>
+      <div className="a-input">
+        <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey}
+          placeholder="Message the Care Assistant…" />
+        <button className="a-send" onClick={send} disabled={busy || !input.trim()}>Send</button>
+      </div>
+    </aside>
+  );
+}
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [tab, setTab] = useState("patients");
+  const [open, setOpen] = useState(null); // { id, name } when a chart is open
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  useEffect(() => { hsApi.get("/healthsphere/api/me").then(setUser).catch(() => {}); }, []);
+  if (!user) return <div className="center">Loading workspace…</div>;
+
+  let content;
+  if (tab === "patients") {
+    content = open
+      ? <Chart patient={open} onBack={() => setOpen(null)} />
+      : <Census onOpen={setOpen} />;
+  } else {
+    const label = NAV.find((n) => n.id === tab).label;
+    content = <div><div className="page-h"><h1>{label}</h1><span className="sub">Coming in a later phase</span></div><div className="panel" style={{ padding: 40, color: "#5b6b82" }}>This area is part of a later build phase.</div></div>;
+  }
+
+  // Copilot reflow: the assistant is a real grid column; main shrinks beside it.
+  const cols = assistantOpen ? "216px 1fr 400px" : "216px 1fr";
+  const context = tab === "patients" && open ? open : null;
+
+  return (
+    <div className="app">
+      <Topbar user={user} assistantOpen={assistantOpen} onToggleAssistant={() => setAssistantOpen((v) => !v)} />
+      <div className="body" style={{ gridTemplateColumns: cols }}>
+        <Nav active={tab} onNav={(id) => { setTab(id); setOpen(null); }} />
+        <main className="main">{content}</main>
+        {assistantOpen && <Assistant context={context} onClose={() => setAssistantOpen(false)} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);

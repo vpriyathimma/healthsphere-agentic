@@ -1,0 +1,27 @@
+{
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "records": {
+            "runtimeId": "healthsphereagents_records-McSRpx8K0V",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:146717645851:runtime/healthsphereagents_records-McSRpx8K0V",
+            "roleArn": "arn:aws:iam::146717645851:role/AgentCore-healthsphereage-ApplicationAgentRecordsRu-b4U49G7BeOxv"
+          },
+          "admissions": {
+            "runtimeId": "healthsphereagents_admissions-qbDP7fFAL3",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:146717645851:runtime/healthsphereagents_admissions-qbDP7fFAL3",
+            "roleArn": "arn:aws:iam::146717645851:role/AgentCore-healthsphereage-ApplicationAgentAdmission-fcKWs4f5wm8p"
+          },
+          "healthsphereagents": {
+            "runtimeId": "healthsphereagents_healthsphereagents-TjsNdn5RCO",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:146717645851:runtime/healthsphereagents_healthsphereagents-TjsNdn5RCO",
+            "roleArn": "arn:aws:iam::146717645851:role/AgentCore-healthsphereage-ApplicationAgentHealthsph-Qq1wgX4BDDod"
+          }
+        },
+        "stackName": "AgentCore-healthsphereagents-default",
+        "deployHash": "0088ac4b4173853c"
+      }
+    }
+  }
+}
