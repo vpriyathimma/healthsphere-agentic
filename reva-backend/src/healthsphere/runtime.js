@@ -79,9 +79,12 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken 
             actor_email: (actor && actor.email) || "",
             actor_name: (actor && actor.name) || "",
             actor_role: (actor && actor.role) || "",
-            // The user's own access token. The Reva SDK's token-enrich call
-            // reads the principal claim from this; without it the PDP has no
-            // identity for the caller and returns 401.
+            // Both Cognito tokens, because they are used for different things.
+            // The ACCESS token is what the PDP validates at the entry hop — it
+            // is the credential the user actually presented. The ID token
+            // carries the profile claims. Both are JWTs, so no external IdP is
+            // required to satisfy the transaction-token flow.
+            user_access_token: bearer || "",
             user_token: idToken || bearer || "",
           })
         ),
