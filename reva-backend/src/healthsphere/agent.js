@@ -68,7 +68,10 @@ async function invokeAgent({ user, traceId, target, prompt, bearer, actor }) {
   // HS_SUPERVISOR_ARN is set, go straight to the supervisor and let it delegate
   // to records/admissions inside AWS. Unset, everything below is unchanged.
   if (runtime.enabled()) {
-    return runtime.invokeSupervisor({ user, traceId, prompt, actor });
+    // bearer is the signed-in user's access token. The Reva SDK reads the
+    // principal claim from it, so the agent needs the token itself, not just
+    // the actor fields derived from it.
+    return runtime.invokeSupervisor({ user, traceId, prompt, actor, bearer });
   }
 
   const t = target || gw.supervisorTarget;
