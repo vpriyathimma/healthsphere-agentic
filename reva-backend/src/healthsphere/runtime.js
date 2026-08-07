@@ -16,8 +16,12 @@
 const { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } =
   require("@aws-sdk/client-bedrock-agentcore");
 
-const REGION = process.env.AWS_REGION || "us-west-2";
-const SUPERVISOR_ARN = process.env.HS_SUPERVISOR_ARN || "";
+// .trim() is load-bearing. Pasting an ARN into a hosting provider's env-var UI
+// very easily carries a trailing newline, and the resulting error —
+// "No endpoint or agent found with qualifier 'DEFAULT'" — names a real ARN and
+// looks like a missing runtime rather than whitespace.
+const REGION = (process.env.AWS_REGION || "us-west-2").trim();
+const SUPERVISOR_ARN = (process.env.HS_SUPERVISOR_ARN || "").trim();
 
 let _client = null;
 function client() {
