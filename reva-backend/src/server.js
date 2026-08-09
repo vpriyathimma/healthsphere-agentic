@@ -9,6 +9,14 @@ const credentialRoutes = require("./actions/credentials");
 const app = express();
 app.set("trust proxy", 1); // Render terminates TLS upstream
 app.use(cors());
+
+// MUST come before express.json(). Slack signs the RAW request body, and the
+// global JSON middleware consumes and discards it — after which the HMAC can
+// never be reproduced and every interactivity POST fails verification for a
+// reason that looks like a wrong signing secret.
+app.use("/healthsphere/slack/interactivity",
+        express.raw({ type: "*/*", limit: "1mb" }));
+
 app.use(express.json());
 
 // Session — used ONLY by the /healthsphere clinical app. The Reva dashboard ("/")

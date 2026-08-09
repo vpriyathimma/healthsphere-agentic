@@ -145,12 +145,52 @@ function Assistant({ context, onClose }) {
     setInput(""); setBusy(true);
     try {
       const a = await hsApi.post("/healthsphere/api/agent/ask", { prompt: text, patientId: context ? context.id : null });
+
+      // The action needs a second clinician. Nothing has run — show what is
+      // being waited on and poll until someone decides, in the app or in Slack.
+      if (a.status === "pending_approval") {
+        setMessages((m) => m.concat({ role: "assistant", text: a.reply, pending: a.approval_id }));
+        pollApproval(a.approval_id);
+        return;
+      }
+
       const reply = a.reply || "(no response)";
       setMessages((m) => m.concat({ role: "assistant", text: reply }));
     } catch (e) {
       setMessages((m) => m.concat({ role: "assistant", text: "Error: " + e.message }));
     } finally { setBusy(false); }
   };
+  // Wait on a decision. Whoever decides first wins, whether that is a
+  // clinician in the app or one in Slack; both write the same record.
+  const pollApproval = (id) => {
+    let tries = 0;
+    const tick = async () => {
+      tries += 1;
+      try {
+        const rec = await hsApi.get("/healthsphere/api/approvals/" + id);
+        if (rec.status === "pending") {
+          if (tries < 150) return setTimeout(tick, 2000); // ~5 minutes
+          return setMessages((m) => m.concat({ role: "assistant",
+            text: "Still waiting on a second clinician. This request stays open — you can check back shortly." }));
+        }
+        const who = rec.approver_display ? " by " + rec.approver_display : "";
+        if (rec.status === "approved") {
+          setMessages((m) => m.concat({ role: "assistant",
+            text: "Approved" + who + ". " + (rec.result || "The action has been carried out.") }));
+        } else if (rec.status === "rejected") {
+          setMessages((m) => m.concat({ role: "assistant",
+            text: "Not approved" + who + ". The order has not been placed." }));
+        } else {
+          setMessages((m) => m.concat({ role: "assistant",
+            text: "This request expired before anyone could review it. Please raise it again if it is still needed." }));
+        }
+      } catch (e) {
+        setMessages((m) => m.concat({ role: "assistant", text: "Lost track of that approval: " + e.message }));
+      }
+    };
+    setTimeout(tick, 2000);
+  };
+
   const onKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
 
   return (

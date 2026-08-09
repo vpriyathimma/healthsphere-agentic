@@ -54,8 +54,12 @@ function extractText(data) {
   return JSON.stringify(data);
 }
 
-async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken }) {
-  const sessionId = sessionIdFor(traceId, user);
+async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
+                                  sessionId: sessionIdOverride, hitl }) {
+  // On a replay the session id comes from the approval record rather than
+  // being recomputed. sessionIdFor pads and truncates, so recomputing invites
+  // a mismatch that would quietly start a different session.
+  const sessionId = sessionIdOverride || sessionIdFor(traceId, user);
 
   console.log("[CALL]  app -> agentcore runtime (direct)");
   console.log("        arn        : " + SUPERVISOR_ARN);
@@ -86,6 +90,10 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken 
             // required to satisfy the transaction-token flow.
             user_access_token: bearer || "",
             user_token: idToken || bearer || "",
+            // The approval verdict, when replaying after a decision. Absent on
+            // the first attempt — and absent is not "pending", it means nobody
+            // has been asked, which the policy permits.
+            hitl: hitl || null,
           })
         ),
       })
@@ -100,6 +108,24 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken 
     }
     const text = extractText(data);
     console.log("[RESP]  runtime -> app  bytes=" + raw.length);
+
+    // A gated tool comes back as a structured pending response. Pass it up
+    // rather than flattening it to prose — the caller needs the action and
+    // arguments to replay the call verbatim once a clinician has decided.
+    if (data && data.status === "pending_approval") {
+      console.log("[PEND]  approval required: " + data.action);
+      return {
+        ok: true, stub: false, traceId, target: "hs_supervisor", text, raw,
+        pending: {
+          action: data.action,
+          arguments: data.arguments || {},
+          requester: data.requester,
+          prompt: data.prompt,
+          display_message: data.display_message,
+          session_id: sessionId,
+        },
+      };
+    }
     return { ok: true, stub: false, traceId, target: "hs_supervisor", text, raw };
   } catch (e) {
     console.warn("[runtime] invoke failed: " + e.message);
@@ -107,4 +133,4 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken 
   }
 }
 
-module.exports = { enabled, invokeSupervisor };
+module.exports = { enabled, invokeSupervisor, sessionIdFor };

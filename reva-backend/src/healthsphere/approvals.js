@@ -1,0 +1,140 @@
+/* Approval records for clinical actions that need a second clinician.
+ *
+ * The agent does not suspend. When a gated tool is reached it returns
+ * `pending_approval` and nothing runs; we hold the request here, ask a human,
+ * and then re-invoke the agent with the verdict attached. That is why this
+ * store exists and why it holds the whole replay payload — prompt, session id,
+ * actor — rather than just a status.
+ *
+ * In-memory on purpose for the demo, mirroring the session store. Two
+ * consequences, stated rather than discovered:
+ *   - it resets on redeploy, and any pending approval is lost with it
+ *   - it is per-process, so more than one Render instance would not share it
+ * Everything goes through the small interface below so a real store can drop
+ * in without touching the routes.
+ */
+
+const crypto = require("crypto");
+
+const APPROVALS = new Map();
+
+// Long enough for someone to notice Slack and act; short enough that a stale
+// request cannot be approved days later when the clinical picture has moved on.
+const TTL_MS = 30 * 60 * 1000;
+
+function newId() {
+  return "AP-" + crypto.randomBytes(6).toString("hex").toUpperCase();
+}
+
+function isExpired(rec) {
+  return Date.now() > new Date(rec.expires_at).getTime();
+}
+
+/* Create a pending approval from what the agent handed back. */
+function create({ action, arguments: args, requester, requesterName, sessionId,
+                  prompt, patientRef, displayMessage }) {
+  const now = new Date();
+  const rec = {
+    approval_id: newId(),
+    status: "pending",
+    action,
+    arguments: args || {},
+    // The requester is the Cognito sub — the same identity the PDP uses. Maker
+    // checker compares subs, never display names.
+    requester,
+    requester_name: requesterName || requester,
+    // Stored, not recomputed. runtime.js derives the session id from the trace
+    // id and pads it; the resume must reproduce it exactly, and recomputing
+    // invites a mismatch that would silently start a new session.
+    session_id: sessionId,
+    prompt,
+    patient_ref: patientRef || "",
+    display_message: displayMessage,
+    created_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + TTL_MS).toISOString(),
+    decided_at: null,
+    approver: null,
+    approver_display: null,
+    note: null,
+    slack_ts: null,
+    result: null,
+  };
+  APPROVALS.set(rec.approval_id, rec);
+  return rec;
+}
+
+function get(id) {
+  const rec = APPROVALS.get(id);
+  if (!rec) return null;
+  if (rec.status === "pending" && isExpired(rec)) {
+    rec.status = "expired";
+    rec.decided_at = new Date().toISOString();
+  }
+  return rec;
+}
+
+/* Pending approvals a given clinician is allowed to act on.
+ * Excludes their own requests — you cannot approve your own order. */
+function listFor(principal) {
+  const out = [];
+  for (const rec of APPROVALS.values()) {
+    if (rec.status === "pending" && isExpired(rec)) {
+      rec.status = "expired";
+      rec.decided_at = new Date().toISOString();
+    }
+    if (rec.status === "pending" && rec.requester !== principal) out.push(rec);
+  }
+  return out.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+/* Record a verdict.
+ *
+ * Returns { ok, rec, error }. Every refusal is a distinct error code so the
+ * caller can say something specific — "already decided" and "you cannot
+ * approve your own request" are very different messages to a clinician.
+ *
+ * First verdict wins. The same approval can be clicked twice, or clicked in
+ * Slack and in-app at the same moment; the second gets `already_decided`
+ * rather than overwriting the first.
+ */
+function decide({ approvalId, verdict, approverPrincipal, approverDisplay, note }) {
+  const rec = get(approvalId);
+  if (!rec) return { ok: false, error: "not_found" };
+  if (rec.status === "expired") return { ok: false, error: "expired", rec };
+  if (rec.status !== "pending") return { ok: false, error: "already_decided", rec };
+  if (!approverPrincipal) return { ok: false, error: "unknown_approver", rec };
+  // Maker-checker. Enforced here rather than in the UI, because the UI is not
+  // the only way in — Slack is another.
+  if (approverPrincipal === rec.requester) return { ok: false, error: "self_approval", rec };
+  if (verdict !== "approve" && verdict !== "reject") return { ok: false, error: "bad_verdict", rec };
+
+  rec.status = verdict === "approve" ? "approved" : "rejected";
+  rec.approver = approverPrincipal;
+  rec.approver_display = approverDisplay || approverPrincipal;
+  rec.note = note || null;
+  rec.decided_at = new Date().toISOString();
+  return { ok: true, rec };
+}
+
+/* What the agent needs to evaluate the replayed call. Mirrors the Cedar
+ * context attributes: an absent verdict means nobody has been asked. */
+function hitlFor(rec) {
+  if (!rec || (rec.status !== "approved" && rec.status !== "rejected")) return null;
+  return {
+    status: rec.status,
+    approver: rec.approver,
+    approval_id: rec.approval_id,
+  };
+}
+
+function setSlackTs(id, ts) {
+  const rec = APPROVALS.get(id);
+  if (rec) rec.slack_ts = ts;
+}
+
+function setResult(id, text) {
+  const rec = APPROVALS.get(id);
+  if (rec) rec.result = text;
+}
+
+module.exports = { create, get, listFor, decide, hitlFor, setSlackTs, setResult };
