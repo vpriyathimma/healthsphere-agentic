@@ -32,7 +32,7 @@ function isExpired(rec) {
 
 /* Create a pending approval from what the agent handed back. */
 function create({ action, arguments: args, requester, requesterName, sessionId,
-                  prompt, patientRef, displayMessage }) {
+                  prompt, patientRef, displayMessage, bearer, idToken }) {
   const now = new Date();
   const rec = {
     approval_id: newId(),
@@ -63,6 +63,19 @@ function create({ action, arguments: args, requester, requesterName, sessionId,
     // the clinician gets a generic line and the real confirmation arrives
     // unseen a moment later.
     replay_done: false,
+    // The requester's Cognito tokens, held for the replay.
+    //
+    // A Slack click has no browser session, so without these the replay runs
+    // on the agent's own machine identity and the PDP reads the AGENT as the
+    // originating principal — onBehalfOf then names an agent rather than the
+    // clinician, which is precisely the defect this whole chain exists to
+    // avoid.
+    //
+    // The action is still on behalf of the REQUESTER. The approver is a
+    // separate fact, recorded separately. Held in memory only, for at most the
+    // TTL above.
+    bearer: bearer || null,
+    id_token: idToken || null,
   };
   APPROVALS.set(rec.approval_id, rec);
   return rec;

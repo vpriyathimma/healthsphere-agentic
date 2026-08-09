@@ -84,6 +84,10 @@ router.post("/api/agent/ask", apiGuard, async (req, res) => {
       prompt: fullPrompt,
       patientRef: patientId || (result.pending.arguments || {}).mrn || "",
       displayMessage: result.pending.display_message,
+      // Held so the replay runs as the requesting clinician. A Slack click has
+      // no session of its own.
+      bearer: req.session.hsTokens && req.session.hsTokens.accessToken,
+      idToken: req.session.hsTokens && req.session.hsTokens.idToken,
     });
     try {
       const ts = await slack.postApproval(rec);
@@ -140,7 +144,10 @@ async function decideAndResume({ approvalId, verdict, approverPrincipal,
       sessionId: rec.session_id,
       prompt: rec.prompt,
       actor: { name: rec.requester_name },
-      bearer, idToken,
+      // The requester's tokens, not the approver's: the action is carried out
+      // on behalf of the clinician who asked for it.
+      bearer: rec.bearer || bearer,
+      idToken: rec.id_token || idToken,
       hitl: approvals.hitlFor(rec),
     });
     approvals.setResult(rec.approval_id, replay.text || "");
