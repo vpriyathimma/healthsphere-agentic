@@ -58,6 +58,11 @@ function create({ action, arguments: args, requester, requesterName, sessionId,
     note: null,
     slack_ts: null,
     result: null,
+    // The verdict lands before the replay finishes. Without this the browser
+    // polls, sees "approved", and renders while `result` is still null — so
+    // the clinician gets a generic line and the real confirmation arrives
+    // unseen a moment later.
+    replay_done: false,
   };
   APPROVALS.set(rec.approval_id, rec);
   return rec;
@@ -134,7 +139,10 @@ function setSlackTs(id, ts) {
 
 function setResult(id, text) {
   const rec = APPROVALS.get(id);
-  if (rec) rec.result = text;
+  if (rec) {
+    rec.result = text;
+    rec.replay_done = true;
+  }
 }
 
 module.exports = { create, get, listFor, decide, hitlFor, setSlackTs, setResult };

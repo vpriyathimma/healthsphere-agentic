@@ -168,7 +168,11 @@ function Assistant({ context, onClose }) {
       tries += 1;
       try {
         const rec = await hsApi.get("/healthsphere/api/approvals/" + id);
-        if (rec.status === "pending") {
+        // An approval is decided before the action has actually run. Keep
+        // waiting until the replay reports back, or the clinician sees
+        // "approved" with nothing to show for it.
+        const settling = rec.status === "approved" && !rec.replay_done;
+        if (rec.status === "pending" || settling) {
           if (tries < 150) return setTimeout(tick, 2000); // ~5 minutes
           return setMessages((m) => m.concat({ role: "assistant",
             text: "Still waiting on a second clinician. This request stays open — you can check back shortly." }));

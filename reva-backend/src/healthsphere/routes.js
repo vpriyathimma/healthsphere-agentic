@@ -6,7 +6,7 @@ const { invokeAgent } = require("./agent");
 const { newTraceId } = require("./trace");
 const approvals = require("./approvals");
 const slack = require("../integrations/slack");
-const { subForEmail } = require("./principals");
+const { resolveApprover } = require("./principals");
 const runtime = require("./runtime");
 
 const router = express.Router();
@@ -229,7 +229,8 @@ router.post("/slack/interactivity", async (req, res) => {
     // Cognito sub, and refuse if it cannot be resolved — an approver we cannot
     // attribute is not an approver.
     const email = await slack.emailForUser(payload.user && payload.user.id);
-    const sub = email ? await subForEmail(email) : null;
+    const who = email ? await resolveApprover(email) : null;
+    const sub = who && who.sub;
     if (!sub) {
       console.warn("[slack] unmappable approver: " + ((payload.user || {}).id || "?")
         + " email=" + (email || "none"));
@@ -239,7 +240,9 @@ router.post("/slack/interactivity", async (req, res) => {
     const out = await decideAndResume({
       approvalId, verdict,
       approverPrincipal: sub,
-      approverDisplay: (payload.user && payload.user.name) || email,
+      // The clinician the decision is attributed to, not the Slack username —
+      // the audit trail records that sub, and the channel must say the same.
+      approverDisplay: (clinicianFor(who.email) || {}).name || who.email,
       note: null,
     });
     if (!out.ok) {

@@ -77,4 +77,16 @@ async function subForEmail(email) {
   }
 }
 
-module.exports = { subForEmail };
+/* Resolve a Slack email to the clinician identity actually recorded.
+ *
+ * Returns the email too, so callers can show the clinician the decision is
+ * attributed to rather than the Slack username. Those must agree: the audit
+ * trail says one identity and the channel must not say another. */
+async function resolveApprover(email) {
+  const key = String(email || "").toLowerCase().trim();
+  const resolved = ALIASES.get(key) || key;
+  const sub = await subForEmail(email);
+  return sub ? { sub, email: resolved } : null;
+}
+
+module.exports = { subForEmail, resolveApprover };
