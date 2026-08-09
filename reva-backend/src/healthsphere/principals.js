@@ -22,6 +22,26 @@ const ISSUER = process.env.COGNITO_ISSUER
   || "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_G8lMqbQtE";
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || ISSUER.split("/").pop();
 
+/* Slack email -> clinician email.
+ *
+ * Slack accounts are real people on a real domain; the demo clinicians are
+ * Cognito users on healthsphere.com. Nobody's Slack address is going to be
+ * emma.davis@healthsphere.com, so without a mapping every Slack approver is
+ * unattributable and every Slack decision is refused.
+ *
+ * Configured, not hardcoded:
+ *   SLACK_APPROVER_MAP="sai.srungaram@reva.ai=david.brown@healthsphere.com,..."
+ *
+ * This is a demo affordance and should be stated as one: in production the
+ * approver would sign in as themselves and no mapping would exist.
+ */
+const ALIASES = new Map(
+  String(process.env.SLACK_APPROVER_MAP || "")
+    .split(",")
+    .map((pair) => pair.split("=").map((x) => x.trim().toLowerCase()))
+    .filter((kv) => kv.length === 2 && kv[0] && kv[1])
+);
+
 let client = null;
 function cognito() {
   if (!client) client = new CognitoIdentityProviderClient({ region: REGION });
@@ -31,8 +51,12 @@ function cognito() {
 const cache = new Map();
 
 async function subForEmail(email) {
-  const key = String(email || "").toLowerCase().trim();
+  let key = String(email || "").toLowerCase().trim();
   if (!key) return null;
+  if (ALIASES.has(key)) {
+    console.log("[approvals] mapped Slack approver " + key + " -> " + ALIASES.get(key));
+    key = ALIASES.get(key);
+  }
   if (cache.has(key)) return cache.get(key);
 
   try {

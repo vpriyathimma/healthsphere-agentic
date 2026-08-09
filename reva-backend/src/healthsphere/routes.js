@@ -231,7 +231,9 @@ router.post("/slack/interactivity", async (req, res) => {
     const email = await slack.emailForUser(payload.user && payload.user.id);
     const sub = email ? await subForEmail(email) : null;
     if (!sub) {
-      console.warn("[slack] unmappable approver: " + ((payload.user || {}).id || "?"));
+      console.warn("[slack] unmappable approver: " + ((payload.user || {}).id || "?")
+        + " email=" + (email || "none"));
+      await slack.postRefusal(payload.user && payload.user.id, "unknown_approver");
       return;
     }
     const out = await decideAndResume({
@@ -240,7 +242,10 @@ router.post("/slack/interactivity", async (req, res) => {
       approverDisplay: (payload.user && payload.user.name) || email,
       note: null,
     });
-    if (!out.ok) console.warn("[slack] decision refused: " + out.error);
+    if (!out.ok) {
+      console.warn("[slack] decision refused: " + out.error);
+      await slack.postRefusal(payload.user && payload.user.id, out.error);
+    }
   } catch (e) {
     console.warn("[slack] interactivity failed: " + e.message);
   }

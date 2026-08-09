@@ -175,7 +175,35 @@ async function emailForUser(slackUserId) {
   return (data.user && data.user.profile && data.user.profile.email) || null;
 }
 
+/* Tell the clicker why their decision did not count.
+ *
+ * A refused decision used to do nothing at all, which is indistinguishable
+ * from a broken integration. Ephemeral so only they see it — a refusal is
+ * feedback, not an announcement.
+ */
+const REFUSALS = {
+  self_approval: "You raised this request, so you can't approve it. It needs a different clinician.",
+  unknown_approver: "Your Slack account isn't linked to a clinician, so the decision can't be attributed. Ask an administrator to link it.",
+  already_decided: "This request has already been decided.",
+  expired: "This request expired before it could be reviewed.",
+  not_found: "That request no longer exists.",
+  bad_verdict: "That action wasn't recognised.",
+};
+
+async function postRefusal(userId, reason) {
+  if (!enabled() || !userId) return;
+  try {
+    await slackPost("chat.postEphemeral", {
+      channel: CHANNEL,
+      user: userId,
+      text: REFUSALS[reason] || `The decision could not be recorded (${reason}).`,
+    });
+  } catch (e) {
+    console.warn("[slack] could not post refusal: " + e.message);
+  }
+}
+
 module.exports = {
   enabled, configSummary, postApproval, resolveMessage,
-  verifySignature, emailForUser,
+  verifySignature, emailForUser, postRefusal,
 };
