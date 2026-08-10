@@ -7,7 +7,15 @@ const cfg = {
   clientId: process.env.COGNITO_CLIENT_ID || "5n0dsr1in8u8nl2ccodugei34k",
   redirectUri: process.env.COGNITO_REDIRECT_URI || "https://healthsphere-agentic.onrender.com/healthsphere/auth/callback",
   scopes: (process.env.COGNITO_SCOPES || "openid email").split(/\s+/),
-  postLogout: process.env.HS_POST_LOGOUT || "https://healthsphere-agentic.onrender.com/healthsphere",
+  // Sign-out lands on the clinician picker, so the demo loops straight back to
+  // "choose who to be" instead of a dead end.
+  //
+  // This value must EXACTLY match a registered sign-out URL on the app client —
+  // Cognito compares the whole string, and a mismatch renders as a bare
+  // "Invalid request" that names nothing. It was previously unregistered
+  // entirely, which is why sign-out failed.
+  postLogout: process.env.HS_POST_LOGOUT
+    || "https://healthsphere-agentic-wep2.onrender.com/healthsphere/signin",
 };
 
 const b64url = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
