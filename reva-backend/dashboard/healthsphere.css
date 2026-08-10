@@ -107,3 +107,10 @@ table.census tbody tr:hover { background: var(--surface-2); }
 .msg.assistant.typing span:nth-child(2) { animation-delay: .2s; }
 .msg.assistant.typing span:nth-child(3) { animation-delay: .4s; }
 @keyframes hs-blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+/* Care Assistant — session controls */
+.a-actions { display: flex; align-items: center; gap: 8px; }
+.a-new { background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--muted); font-size: 12px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.a-new:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+.a-new:disabled { opacity: .45; cursor: default; }

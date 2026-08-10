@@ -136,6 +136,10 @@ function Assistant({ context, onClose }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const threadRef = useRef(null);
+  // Bumped by "New session". An approval poll started in an earlier session can
+  // still be running — it retries for ~5 minutes — and without this it would
+  // append "Approved by..." into a conversation that has already been cleared.
+  const genRef = useRef(0);
   useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [messages, busy]);
 
   const send = async () => {
@@ -164,10 +168,14 @@ function Assistant({ context, onClose }) {
   // clinician in the app or one in Slack; both write the same record.
   const pollApproval = (id) => {
     let tries = 0;
+    const gen = genRef.current;
+    const stale = () => genRef.current !== gen;
     const tick = async () => {
+      if (stale()) return;
       tries += 1;
       try {
         const rec = await hsApi.get("/healthsphere/api/approvals/" + id);
+        if (stale()) return;
         // An approval is decided before the action has actually run. Keep
         // waiting until the replay reports back, or the clinician sees
         // "approved" with nothing to show for it.
@@ -189,10 +197,22 @@ function Assistant({ context, onClose }) {
             text: "This request expired before anyone could review it. Please raise it again if it is still needed." }));
         }
       } catch (e) {
+        if (stale()) return;
         setMessages((m) => m.concat({ role: "assistant", text: "Lost track of that approval: " + e.message }));
       }
     };
     setTimeout(tick, 2000);
+  };
+
+  // Start over. Nothing needs clearing server-side: the app sends no
+  // conversation history and derives a fresh runtime session per request, so
+  // the agent already carries nothing between turns. This clears what the
+  // clinician can see, and invalidates any approval poll still running.
+  const newSession = () => {
+    genRef.current += 1;
+    setMessages([]);
+    setInput("");
+    setBusy(false);
   };
 
   const onKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
@@ -201,7 +221,14 @@ function Assistant({ context, onClose }) {
     <aside className="assistant">
       <div className="a-head">
         <div className="a-title"><span className="mark" />Care Assistant</div>
-        <button className="a-close" onClick={onClose} title="Close">×</button>
+        <div className="a-actions">
+          <button className="a-new" onClick={newSession}
+                  disabled={messages.length === 0 && !input}
+                  title="Start a new session — the assistant keeps nothing from this conversation">
+            New session
+          </button>
+          <button className="a-close" onClick={onClose} title="Close">×</button>
+        </div>
       </div>
       <div className="a-ctx">
         {context ? <span>In context: <b>{context.name}</b></span> : <span>No patient in context — open a chart to add one.</span>}
