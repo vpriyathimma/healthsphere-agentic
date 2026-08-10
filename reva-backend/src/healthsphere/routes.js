@@ -16,7 +16,67 @@ router.get("/auth/login", (req, res) => {
   const state = auth.randomState();
   const { verifier, challenge } = auth.pkce();
   req.session.hsOauth = { state, verifier };
-  res.redirect(auth.authorizeUrl(state, challenge));
+  res.redirect(auth.authorizeUrl(state, challenge, req.query.hint));
+});
+
+// The profile picker. Amit: "I don't want to keep pasting username and password
+// in front of the customer" — so a demo starts by clicking a face, not typing.
+//
+// Clicking a profile sends login_hint, which prefills the email on Cognito's
+// page. The password field is filled by the browser's saved credential; there
+// is no Cognito parameter for a password and there should not be. Sign in once
+// on the demo machine, let the browser save it, and thereafter it is one click
+// then Sign in.
+//
+// This is NOT a shortcut around authentication. Cognito still authenticates and
+// still issues the tokens — the app never asserts who it is acting for, which
+// is the property the whole demo rests on.
+const PROFILES = [
+  { email: "emma.davis@healthsphere.com",     name: "Dr. Emma Davis",    role: "Attending Physician · Cardiology" },
+  { email: "sarah.johnson@healthsphere.com",  name: "Dr. Sarah Johnson", role: "Attending Physician · Neurology" },
+  { email: "david.brown@healthsphere.com",    name: "Dr. David Brown",   role: "Attending Physician · Orthopedics" },
+  { email: "lily.armstrong@healthsphere.com", name: "Lily Armstrong",    role: "Registered Nurse" },
+  { email: "james.porter@healthsphere.com",   name: "James Porter",      role: "Registered Nurse" },
+];
+
+router.get("/signin", (req, res) => {
+  const cards = PROFILES.map((p) => `
+      <a class="p" href="/healthsphere/auth/login?hint=${encodeURIComponent(p.email)}">
+        <span class="n">${p.name}</span>
+        <span class="r">${p.role}</span>
+        <span class="e">${p.email}</span>
+      </a>`).join("");
+  res.type("html").send(`<!doctype html>
+<meta charset="utf-8"><title>HealthSphere — sign in</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;
+    background:linear-gradient(165deg,#0f2027 0%,#173a43 55%,#1e4d55 100%);
+    font:15px/1.5 "Plus Jakarta Sans",Inter,system-ui,-apple-system,sans-serif;color:#eaf6f8}
+  .w{width:min(680px,92vw);text-align:center;padding:40px 0}
+  .b{display:flex;align-items:center;justify-content:center;gap:12px;
+     font-size:27px;font-weight:600;letter-spacing:-.02em;margin-bottom:8px}
+  .m{width:26px;height:26px;border-radius:7px;
+     background:linear-gradient(135deg,#4dd0e1,#26a69a)}
+  .s{color:#9fc4cc;font-size:14px;margin:0 0 34px}
+  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .p{display:flex;flex-direction:column;gap:3px;padding:17px 18px;text-decoration:none;
+     background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);
+     border-radius:14px;color:#eaf6f8;text-align:left;transition:.14s}
+  .p:hover{background:rgba(255,255,255,.12);border-color:#4dd0e1;transform:translateY(-1px)}
+  .n{font-weight:600}
+  .r{font-size:12.5px;color:#9fc4cc}
+  .e{font-size:11.5px;color:#6f939c;font-family:ui-monospace,monospace;margin-top:3px}
+  .f{margin-top:26px;font-size:12px;color:#6f939c}
+</style>
+<div class="w">
+  <div class="b"><span class="m"></span>HealthSphere</div>
+  <p class="s">Clinical Workspace — choose a clinician to sign in as</p>
+  <div class="g">${cards}</div>
+  <p class="f">Each is a real Cognito user. Selecting one authenticates against the
+  identity provider — the application never asserts who it is acting for.</p>
+</div>`);
 });
 router.get("/auth/callback", async (req, res) => {
   try {
@@ -42,7 +102,7 @@ router.post("/auth/logout", (req, res) => {
 });
 
 // ---- Guards (page redirects; api returns 401) ----
-const pageGuard = (req, res, next) => (req.session.hsUser ? next() : res.redirect("/healthsphere/auth/login"));
+const pageGuard = (req, res, next) => (req.session.hsUser ? next() : res.redirect("/healthsphere/signin"));
 const apiGuard = (req, res, next) => (req.session.hsUser ? next() : res.status(401).json({ error: "not_authenticated" }));
 
 // ---- Clinical API (custom-app operations only; nothing audited here) ----
@@ -122,7 +182,7 @@ async function decideAndResume({ approvalId, verdict, approverPrincipal,
                                  approverDisplay, note, bearer, idToken, user }) {
   const d = approvals.decide({ approvalId, verdict, approverPrincipal, approverDisplay, note });
   if (!d.ok) {
-    const codes = { not_found: 404, self_approval: 403, unknown_approver: 403,
+    const codes = { not_found: 404, unknown_approver: 403,
                     already_decided: 409, expired: 410, bad_verdict: 400 };
     return { ok: false, error: d.error, code: codes[d.error] || 400, rec: d.rec };
   }

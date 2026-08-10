@@ -100,7 +100,10 @@ function listFor(principal) {
       rec.status = "expired";
       rec.decided_at = new Date().toISOString();
     }
-    if (rec.status === "pending" && rec.requester !== principal) out.push(rec);
+    // The requester sees their own pending approvals. The control here is not
+    // "somebody else must agree" — it is "the agent does not act until a human
+    // says so". Hiding your own request would make it undecidable from the app.
+    if (rec.status === "pending") out.push(rec);
   }
   return out.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -108,8 +111,17 @@ function listFor(principal) {
 /* Record a verdict.
  *
  * Returns { ok, rec, error }. Every refusal is a distinct error code so the
- * caller can say something specific — "already decided" and "you cannot
- * approve your own request" are very different messages to a clinician.
+ * caller can say something specific.
+ *
+ * NOT maker-checker. The requester may approve their own action, deliberately.
+ * Sai: "the approvals is not only for going for a second clinician... the same
+ * user, Emma Davis, can get a Slack approval and approve on his own Slack.
+ * This is not like my manager has to approve it. The human in the loop here is
+ * I don't want my agent to execute that action."
+ *
+ * So the property being enforced is that the AGENT does not act autonomously —
+ * a human decides. Whether that human is a second clinician is a policy
+ * question, and Cedar is where it would belong, not hard-coded here.
  *
  * First verdict wins. The same approval can be clicked twice, or clicked in
  * Slack and in-app at the same moment; the second gets `already_decided`
@@ -121,9 +133,6 @@ function decide({ approvalId, verdict, approverPrincipal, approverDisplay, note 
   if (rec.status === "expired") return { ok: false, error: "expired", rec };
   if (rec.status !== "pending") return { ok: false, error: "already_decided", rec };
   if (!approverPrincipal) return { ok: false, error: "unknown_approver", rec };
-  // Maker-checker. Enforced here rather than in the UI, because the UI is not
-  // the only way in — Slack is another.
-  if (approverPrincipal === rec.requester) return { ok: false, error: "self_approval", rec };
   if (verdict !== "approve" && verdict !== "reject") return { ok: false, error: "bad_verdict", rec };
 
   rec.status = verdict === "approve" ? "approved" : "rejected";

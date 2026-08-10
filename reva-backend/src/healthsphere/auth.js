@@ -19,11 +19,16 @@ function pkce() {
 }
 const randomState = () => b64url(crypto.randomBytes(16));
 
-function authorizeUrl(state, challenge) {
+// loginHint prefills the email on Cognito's page, so a demo never involves
+// typing an address in front of a customer. Cognito has no equivalent for the
+// password — there is no parameter for it and there should not be — so the
+// browser's saved credential is what fills that field. See the profile picker.
+function authorizeUrl(state, challenge, loginHint) {
   const p = new URLSearchParams({
     response_type: "code", client_id: cfg.clientId, redirect_uri: cfg.redirectUri,
     scope: cfg.scopes.join(" "), state, code_challenge: challenge, code_challenge_method: "S256",
   });
+  if (loginHint) p.set("login_hint", loginHint);
   return `${cfg.domain}/oauth2/authorize?${p.toString()}`;
 }
 function logoutUrl() {
