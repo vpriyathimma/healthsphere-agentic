@@ -41,40 +41,41 @@ const PROFILES = [
 
 router.get("/signin", (req, res) => {
   const cards = PROFILES.map((p) => `
-      <a class="p" href="/healthsphere/auth/login?hint=${encodeURIComponent(p.email)}">
-        <span class="n">${p.name}</span>
-        <span class="r">${p.role}</span>
-        <span class="e">${p.email}</span>
+      <a class="pick" href="/healthsphere/auth/login?hint=${encodeURIComponent(p.email)}">
+        <span class="pick-n">${p.name}</span>
+        <span class="pick-r">${p.role}</span>
+        <span class="pick-e">${p.email}</span>
       </a>`).join("");
+  // Links the workspace's own stylesheet rather than restating its colours, so
+  // the picker cannot drift from the app it opens into. Only layout is added
+  // here; every colour, border and radius comes from healthsphere.css.
   res.type("html").send(`<!doctype html>
 <meta charset="utf-8"><title>HealthSphere — sign in</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/healthsphere.css">
 <style>
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;
-    background:linear-gradient(165deg,#0f2027 0%,#173a43 55%,#1e4d55 100%);
-    font:15px/1.5 "Plus Jakarta Sans",Inter,system-ui,-apple-system,sans-serif;color:#eaf6f8}
-  .w{width:min(680px,92vw);text-align:center;padding:40px 0}
-  .b{display:flex;align-items:center;justify-content:center;gap:12px;
-     font-size:27px;font-weight:600;letter-spacing:-.02em;margin-bottom:8px}
-  .m{width:26px;height:26px;border-radius:7px;
-     background:linear-gradient(135deg,#4dd0e1,#26a69a)}
-  .s{color:#9fc4cc;font-size:14px;margin:0 0 34px}
-  .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-  .p{display:flex;flex-direction:column;gap:3px;padding:17px 18px;text-decoration:none;
-     background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);
-     border-radius:14px;color:#eaf6f8;text-align:left;transition:.14s}
-  .p:hover{background:rgba(255,255,255,.12);border-color:#4dd0e1;transform:translateY(-1px)}
-  .n{font-weight:600}
-  .r{font-size:12.5px;color:#9fc4cc}
-  .e{font-size:11.5px;color:#6f939c;font-family:ui-monospace,monospace;margin-top:3px}
-  .f{margin-top:26px;font-size:12px;color:#6f939c}
+  body{background:var(--surface-2);display:grid;place-items:center;min-height:100vh;margin:0}
+  .signin{width:min(760px,92vw);padding:40px 0;text-align:center}
+  .signin .brand{justify-content:center;font-size:23px;color:var(--ink);margin-bottom:6px}
+  .signin .brand .mark{width:26px;height:26px;border-radius:7px}
+  .signin .brand small{color:var(--muted);font-weight:500}
+  .signin .lede{color:var(--muted);font-size:14px;margin:0 0 30px}
+  .picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px}
+  .pick{display:flex;flex-direction:column;gap:3px;padding:16px 17px;text-decoration:none;
+    background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 1px 2px rgba(15,23,42,.06);text-align:left;transition:.14s}
+  .pick:hover{border-color:var(--primary);box-shadow:0 2px 10px rgba(14,116,144,.13);
+    transform:translateY(-1px)}
+  .pick-n{font-weight:650;color:var(--text);font-size:15px}
+  .pick-r{font-size:12.5px;color:var(--muted)}
+  .pick-e{font-family:var(--mono);font-size:11px;color:var(--line-strong);margin-top:4px}
+  .signin .foot{margin-top:26px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
-<div class="w">
-  <div class="b"><span class="m"></span>HealthSphere</div>
-  <p class="s">Clinical Workspace — choose a clinician to sign in as</p>
-  <div class="g">${cards}</div>
-  <p class="f">Each is a real Cognito user. Selecting one authenticates against the
+<div class="signin">
+  <div class="brand"><span class="mark"></span>HealthSphere<small>Clinical Workspace</small></div>
+  <p class="lede">Choose a clinician to sign in as</p>
+  <div class="picks">${cards}</div>
+  <p class="foot">Each is a real Cognito user. Selecting one authenticates against the
   identity provider — the application never asserts who it is acting for.</p>
 </div>`);
 });
