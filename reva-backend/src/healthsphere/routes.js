@@ -69,14 +69,11 @@ router.get("/signin", (req, res) => {
   .pick-n{font-weight:650;color:var(--text);font-size:15px}
   .pick-r{font-size:12.5px;color:var(--muted)}
   .pick-e{font-family:var(--mono);font-size:11px;color:var(--line-strong);margin-top:4px}
-  .signin .foot{margin-top:26px;font-size:12px;color:var(--muted);line-height:1.6}
 </style>
 <div class="signin">
   <div class="brand"><span class="mark"></span>HealthSphere<small>Clinical Workspace</small></div>
   <p class="lede">Choose a clinician to sign in as</p>
   <div class="picks">${cards}</div>
-  <p class="foot">Each is a real Cognito user. Selecting one authenticates against the
-  identity provider — the application never asserts who it is acting for.</p>
 </div>`);
 });
 router.get("/auth/callback", async (req, res) => {
