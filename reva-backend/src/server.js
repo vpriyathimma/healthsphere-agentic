@@ -4,6 +4,7 @@ const path = require("path");
 const session = require("express-session");
 const { runDiscovery } = require("./connectors/aws-agentcore/discovery");
 const healthsphereRouter = require("./healthsphere/routes");
+const aivssRouter = require("./aivss/routes");
 const credentialRoutes = require("./actions/credentials");
 
 const app = express();
@@ -71,6 +72,10 @@ app.post("/api/discovery/run", async (req, res) => {
 // Agent credential activate / inactivate (IAM inline policy delete + put).
 // Reads the execution role from the current discovery snapshot.
 app.use("/api/agents", credentialRoutes(() => discoveryCache));
+
+// AIVSS scoring. Mounted here so the dashboard can call it from the same
+// origin it is served from — no CORS, no second service to deploy.
+app.use("/api/aivss", aivssRouter);
 
 app.get("/api/discovery", (_req, res) => {
   if (!discoveryCache) return res.status(404).json({ error: "No discovery data. Run POST /api/discovery/run first." });

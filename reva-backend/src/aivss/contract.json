@@ -1,0 +1,291 @@
+{
+  "methodology": "OWASP AIVSS v0.8 (formula unchanged) \u2014 Reva input corrections v1.1",
+  "severityBands": [
+    {
+      "band": "Critical",
+      "min": 9.0,
+      "max": 10.0,
+      "tier": "red",
+      "color": "#DC2626",
+      "showBanner": true
+    },
+    {
+      "band": "High",
+      "min": 7.0,
+      "max": 8.9,
+      "tier": "red",
+      "color": "#DC2626",
+      "showBanner": true
+    },
+    {
+      "band": "Medium",
+      "min": 4.0,
+      "max": 6.9,
+      "tier": "yellow",
+      "color": "#F59E0B",
+      "showBanner": true
+    },
+    {
+      "band": "Low",
+      "min": 0.1,
+      "max": 3.9,
+      "tier": "none",
+      "color": "#64748B",
+      "showBanner": false
+    }
+  ],
+  "threatMultiplierOptions": [
+    {
+      "code": "Attacked",
+      "value": 1.0
+    },
+    {
+      "code": "Proof-of-Concept",
+      "value": 0.97
+    },
+    {
+      "code": "Unreported",
+      "value": 0.5,
+      "note": "DEFAULT \u2014 use unless a known exploit targets this specific agent"
+    }
+  ],
+  "mitigationMap": [
+    {
+      "status": "Discovered",
+      "level": "Unassessed",
+      "factor": 0.9,
+      "note": "Controls UNKNOWN, not absent. Neutral default until an assessment sets a real level."
+    },
+    {
+      "status": "Governed",
+      "level": "Partial",
+      "factor": 0.83
+    },
+    {
+      "status": "Governed",
+      "level": "Strong",
+      "factor": 0.67,
+      "note": "fully-enforced, validated controls"
+    }
+  ],
+  "factorCatalog": [
+    {
+      "key": "autonomy",
+      "label": "Autonomy",
+      "definition": "Degree to which the agent acts and decides without human approval."
+    },
+    {
+      "key": "tools",
+      "label": "Tools",
+      "definition": "Breadth and privilege of tools / functions the agent can invoke."
+    },
+    {
+      "key": "language",
+      "label": "Language",
+      "definition": "Reliance on unstructured natural-language input (prompt-injection surface)."
+    },
+    {
+      "key": "context",
+      "label": "Context",
+      "definition": "Use of broad or external data/context that can be manipulated."
+    },
+    {
+      "key": "non_determinism",
+      "label": "Non-Determinism",
+      "definition": "Variability and unpredictability of the agent's outputs."
+    },
+    {
+      "key": "opacity",
+      "label": "Opacity",
+      "definition": "Lack of transparency, logging, or auditability of actions."
+    },
+    {
+      "key": "persistence",
+      "label": "Persistence",
+      "definition": "Memory or state retained across sessions."
+    },
+    {
+      "key": "identity",
+      "label": "Identity",
+      "definition": "Ability to assume roles or act under delegated identity / credentials."
+    },
+    {
+      "key": "multi_agent",
+      "label": "Multi-Agent",
+      "definition": "Coordinates with or spawns other agents (cascading blast radius)."
+    },
+    {
+      "key": "self_modification",
+      "label": "Self-Modification",
+      "definition": "Ability to alter its own code, prompts, or configuration."
+    }
+  ],
+  "coreRiskCatalog": [
+    {
+      "id": "goal_instruction_manipulation",
+      "name": "Agent Goal & Instruction Manipulation",
+      "salientFactors": [
+        "language",
+        "autonomy",
+        "context"
+      ]
+    },
+    {
+      "id": "untraceability",
+      "name": "Agent Untraceability",
+      "salientFactors": [
+        "opacity",
+        "persistence",
+        "identity"
+      ]
+    },
+    {
+      "id": "tool_misuse",
+      "name": "Agentic AI Tool Misuse",
+      "salientFactors": [
+        "tools",
+        "autonomy",
+        "identity"
+      ]
+    },
+    {
+      "id": "access_control_violation",
+      "name": "Agent Access Control Violation",
+      "salientFactors": [
+        "identity",
+        "autonomy",
+        "tools"
+      ]
+    },
+    {
+      "id": "insecure_critical_systems",
+      "name": "Insecure Agent Critical Systems Interaction",
+      "salientFactors": [
+        "tools",
+        "autonomy",
+        "identity"
+      ]
+    },
+    {
+      "id": "orchestration_multiagent",
+      "name": "Agent Orchestration & Multi-Agent Exploitation",
+      "salientFactors": [
+        "multi_agent",
+        "autonomy",
+        "identity",
+        "opacity"
+      ]
+    },
+    {
+      "id": "identity_impersonation",
+      "name": "Agent Identity Impersonation",
+      "salientFactors": [
+        "identity",
+        "autonomy",
+        "multi_agent"
+      ]
+    },
+    {
+      "id": "memory_context_manipulation",
+      "name": "Agent Memory & Context Manipulation",
+      "salientFactors": [
+        "context",
+        "persistence",
+        "opacity"
+      ]
+    },
+    {
+      "id": "supply_chain_dependency",
+      "name": "Agent Supply Chain & Dependency Risk",
+      "salientFactors": [
+        "self_modification",
+        "tools",
+        "opacity"
+      ]
+    },
+    {
+      "id": "cascading_failures",
+      "name": "Agent Cascading Failures",
+      "salientFactors": [
+        "multi_agent",
+        "autonomy",
+        "persistence"
+      ]
+    }
+  ],
+  "recommendedActionCatalog": [
+    {
+      "id": "govern_agent",
+      "title": "Govern Agent",
+      "icon": "user-01",
+      "description": "Assign an owner and attach an authorization policy to bring the agent under governance."
+    },
+    {
+      "id": "enforce_a2a_auth",
+      "title": "Enforce A2A Auth",
+      "icon": "lock-03",
+      "description": "Enforce runtime authorization on sub-agent spawning, scoped to the delegating user's limits."
+    },
+    {
+      "id": "scoped_tokens",
+      "title": "Scoped Tokens",
+      "icon": "key-01",
+      "description": "Issue task-scoped tokens to connected tools instead of standing credentials."
+    },
+    {
+      "id": "audit_trail",
+      "title": "Audit Trail",
+      "icon": "flag-06",
+      "description": "Enable decision logs with trace IDs to make every action auditable."
+    },
+    {
+      "id": "gate_self_mod",
+      "title": "Gate Self-Modification",
+      "icon": "file-shield-03",
+      "description": "Require review for code/config changes and sign provenance."
+    },
+    {
+      "id": "maintain_controls",
+      "title": "Maintain Controls",
+      "icon": "shield-tick",
+      "description": "Controls are adequate; re-score on any capability or permission change."
+    }
+  ],
+  "formulas": {
+    "base": "see meta.aivss.baseScoreRubric (per-agent, not per-category)",
+    "aars": "(10 - cvssBase) * (factorSum / 10) * threatMultiplier.value",
+    "aivss": "(cvssBase + aars) * mitigation.factor  [clamped 0-10]",
+    "severity": "band from severityBands by aivss score (standard CVSS cut-offs retained)"
+  },
+  "baseScoreRubric": {
+    "description": "Per-agent CVSS-style base (replaces the flat per-risk-category constant). Balanced profile: unknown data sensitivity adds +1.0.",
+    "floor": 3.0,
+    "reach": {
+      "formula": "R = tools + mcpServers + 2*subAgents",
+      "add": {
+        "0": 0.0,
+        "1-2": 1.0,
+        "3-4": 2.0,
+        "5+": 3.0
+      }
+    },
+    "dataSensitivity": {
+      "sensitive(financial/PII/PHI/source)": 2.5,
+      "other": 1.0,
+      "unknown": 1.0
+    },
+    "exposure(users)": {
+      "<5": 0.0,
+      "5-20": 0.5,
+      ">20": 1.0
+    },
+    "cap": 9.5,
+    "note": "Re-score an agent's base once discovery fills in real dataSensitivity / tool scope."
+  },
+  "changeLog": [
+    "v1.1: cvssBase now derived per-agent from reach + data sensitivity + exposure (was flat per risk-category).",
+    "v1.1: Discovered mitigation factor 1.0 -> 0.9 (Unassessed); discovery no longer implies absent controls.",
+    "v1.1: threatMultiplier defaults to Unreported (0.5) unless a known exploit exists for the agent.",
+    "v1.1: severity bands unchanged (Critical>=9, High>=7, Medium>=4). Formula unchanged from AIVSS v0.8."
+  ]
+}
