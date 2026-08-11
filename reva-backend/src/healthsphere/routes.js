@@ -180,7 +180,7 @@ async function decideAndResume({ approvalId, verdict, approverPrincipal,
                                  approverDisplay, note, bearer, idToken, user }) {
   const d = approvals.decide({ approvalId, verdict, approverPrincipal, approverDisplay, note });
   if (!d.ok) {
-    const codes = { not_found: 404, unknown_approver: 403,
+    const codes = { not_found: 404, self_approval: 403, unknown_approver: 403,
                     already_decided: 409, expired: 410, bad_verdict: 400 };
     return { ok: false, error: d.error, code: codes[d.error] || 400, rec: d.rec };
   }

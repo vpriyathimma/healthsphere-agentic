@@ -30,8 +30,15 @@ const CONNECTORS = [
     desc: "Discover and govern AI agents running on AWS Bedrock.", foot: "Platform Sec · 12 agents" },
   { name: "n8n Production Discovery", brand: "n8n", types: ["AI Workload"], on: false,
     desc: "Automated discovery of AI workflows from an n8n production instance via webhook.", foot: "Automation · webhook" },
-  { name: "Slack", brand: "slack", types: ["Approval Channel"], on: true,
-    desc: "Route human-in-the-loop approvals to a Slack channel.", foot: "#ai-approvals · connected" },
+  // `on: false` deliberately. This tile used to claim it was connected to a
+  // channel that did not exist, with a masked token beside it. A
+  // governance product must not show a fabricated connection state — someone
+  // reading this dashboard has no way to tell it from a real one. The real
+  // Slack wiring lives in reva-backend/src/integrations/slack.js and is
+  // configured by environment variables; when it is connected this tile should
+  // read that state rather than assert it.
+  { name: "Slack", brand: "slack", types: ["Approval Channel"], on: false,
+    desc: "Route human-in-the-loop approvals to a Slack channel.", foot: "not configured" },
   { name: "Okta Verify", brand: "oktaverify", types: ["Approval Channel"], on: false,
     desc: "Push approval requests to Okta Verify on mobile.", foot: "Not configured" },
   { name: "Anthropic Analytics", brand: "anthropic", types: ["Analytics Source"], on: true,
@@ -316,7 +323,10 @@ function ConnectionSettings({ provider, category }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <FieldGroup label="Bot Token" required helper="Starts with xoxb-. Stored encrypted.">
           <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ ...inputStyle, display: "flex", alignItems: "center", letterSpacing: 1 }} className="mono">xoxb-••••••••••••••••</div>
+            {/* Empty, not a masked placeholder. A row of dots reads as "a token is
+                stored here" — it is not, and in a governance console that is the
+                one thing a screenshot must not imply. */}
+            <div style={{ ...inputStyle, display: "flex", alignItems: "center", color: "#9e9da1" }} className="mono">not configured</div>
             <CopyBtn size={40} /><button className="btn btn-ghost" style={{ height: 40 }}>Apply</button>
           </div>
         </FieldGroup>

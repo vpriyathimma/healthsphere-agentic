@@ -113,7 +113,11 @@ function listFor(principal) {
  * Returns { ok, rec, error }. Every refusal is a distinct error code so the
  * caller can say something specific.
  *
- * NOT maker-checker. The requester may approve their own action, deliberately.
+ * Maker-checker is a switch, not a decision baked into the code.
+ *
+ * HS_HITL_MAKER_CHECKER=true requires the approver to be someone other than the
+ * requester, which is what the original HITL spec calls non-negotiable. Default
+ * is off, per the later instruction.
  * Sai: "the approvals is not only for going for a second clinician... the same
  * user, Emma Davis, can get a Slack approval and approve on his own Slack.
  * This is not like my manager has to approve it. The human in the loop here is
@@ -127,12 +131,22 @@ function listFor(principal) {
  * Slack and in-app at the same moment; the second gets `already_decided`
  * rather than overwriting the first.
  */
+const makerCheckerRequired = () =>
+  String(process.env.HS_HITL_MAKER_CHECKER || "").toLowerCase() === "true";
+
 function decide({ approvalId, verdict, approverPrincipal, approverDisplay, note }) {
   const rec = get(approvalId);
   if (!rec) return { ok: false, error: "not_found" };
   if (rec.status === "expired") return { ok: false, error: "expired", rec };
   if (rec.status !== "pending") return { ok: false, error: "already_decided", rec };
   if (!approverPrincipal) return { ok: false, error: "unknown_approver", rec };
+  // Off by default. Sai: "the same user, Emma Davis, can get a Slack approval
+  // and approve on his own Slack. This is not like my manager has to approve
+  // it." The original spec says the opposite and calls it non-negotiable, so
+  // this is a switch rather than a choice made in code.
+  if (makerCheckerRequired() && approverPrincipal === rec.requester) {
+    return { ok: false, error: "self_approval", rec };
+  }
   if (verdict !== "approve" && verdict !== "reject") return { ok: false, error: "bad_verdict", rec };
 
   rec.status = verdict === "approve" ? "approved" : "rejected";

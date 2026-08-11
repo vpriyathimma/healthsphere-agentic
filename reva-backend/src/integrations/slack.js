@@ -183,6 +183,7 @@ async function emailForUser(slackUserId) {
  */
 const REFUSALS = {
   unknown_approver: "Your Slack account isn't linked to a clinician, so the decision can't be attributed. Ask an administrator to link it.",
+  self_approval: "You raised this request, so it needs a different clinician to approve it.",
   already_decided: "This request has already been decided.",
   expired: "This request expired before it could be reviewed.",
   not_found: "That request no longer exists.",
