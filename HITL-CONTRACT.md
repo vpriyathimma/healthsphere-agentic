@@ -33,8 +33,8 @@ been executed and no transaction token has been minted.**
   },
   "status": "pending_approval",
   "pending": {
-    "tool": "approve_demo_edit_lg",
-    "arguments": { "mrn": "MRN-1004", "field": "ward", "new_value": "ICU" },
+    "tool": "patient_discharge_lg",
+    "arguments": { "mrn": "MRN-1004", "destination": "home" },
     "display_message": "This action needs a second clinician to approve it before it can be carried out.",
     "requester": "<cognito sub of the clinician who asked>",
     "session_id": "<runtimeSessionId — the join key>",
