@@ -22,20 +22,15 @@ router.get("/auth/login", (req, res) => {
 // The profile picker. Amit: "I don't want to keep pasting username and password
 // in front of the customer" — so a demo starts by clicking a face, not typing.
 //
-// Clicking a clinician signs straight in. It used to send `login_hint` to
-// Cognito's hosted page, which prefills the email and then still shows a
-// password field — there is no Cognito parameter for a password and there
-// should not be — so a demo depended on the browser having saved the
-// credential. Now the click POSTs to /auth/demo, which authenticates against
-// Cognito directly with the shared demo password (auth.passwordSignIn).
+// Clicking a profile sends login_hint, which prefills the email on Cognito's
+// page. The password field is filled by the browser's saved credential; there
+// is no Cognito parameter for a password and there should not be. Sign in once
+// on the demo machine, let the browser save it, and thereafter it is one click
+// then Sign in.
 //
-// This is NOT a shortcut around authentication, and the distinction matters.
-// Cognito still authenticates and still issues the tokens; the app never
-// asserts who it is acting for, which is the property the whole demo rests on.
-// It IS a bypass in the sense that anyone who can reach this page can sign in
-// as any clinician on it — which is why the route only accepts addresses that
-// appear in this list, and why it is a local-demo affordance rather than a
-// login screen.
+// This is NOT a shortcut around authentication. Cognito still authenticates and
+// still issues the tokens — the app never asserts who it is acting for, which
+// is the property the whole demo rests on.
 const PROFILES = [
   { email: "emma.davis@healthsphere.com",     name: "Dr. Emma Davis",    role: "Attending Physician · Cardiology" },
   { email: "sarah.johnson@healthsphere.com",  name: "Dr. Sarah Johnson", role: "Attending Physician · Neurology" },
@@ -45,17 +40,12 @@ const PROFILES = [
 ];
 
 router.get("/signin", (req, res) => {
-  // A form per card rather than a link: signing in is a state change, and a
-  // GET that authenticates would be followed by anything that prefetches links.
   const cards = PROFILES.map((p) => `
-      <form class="pickform" method="post" action="/healthsphere/auth/demo">
-        <input type="hidden" name="email" value="${p.email}">
-        <button class="pick" type="submit">
-          <span class="pick-n">${p.name}</span>
-          <span class="pick-r">${p.role}</span>
-          <span class="pick-e">${p.email}</span>
-        </button>
-      </form>`).join("");
+      <a class="pick" href="/healthsphere/auth/login?hint=${encodeURIComponent(p.email)}">
+        <span class="pick-n">${p.name}</span>
+        <span class="pick-r">${p.role}</span>
+        <span class="pick-e">${p.email}</span>
+      </a>`).join("");
   // Links the workspace's own stylesheet rather than restating its colours, so
   // the picker cannot drift from the app it opens into. Only layout is added
   // here; every colour, border and radius comes from healthsphere.css.
@@ -71,12 +61,9 @@ router.get("/signin", (req, res) => {
   .signin .brand small{color:var(--muted);font-weight:500}
   .signin .lede{color:var(--muted);font-size:14px;margin:0 0 30px}
   .picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(214px,1fr));gap:12px}
-  /* display:contents so each form's button is the grid item, not the form. */
-  .pickform{display:contents}
   .pick{display:flex;flex-direction:column;gap:3px;padding:16px 17px;text-decoration:none;
     background:var(--surface);border:1px solid var(--line);border-radius:8px;
-    box-shadow:0 1px 2px rgba(15,23,42,.06);text-align:left;transition:.14s;
-    font:inherit;width:100%;cursor:pointer}
+    box-shadow:0 1px 2px rgba(15,23,42,.06);text-align:left;transition:.14s}
   .pick:hover{border-color:var(--primary);box-shadow:0 2px 10px rgba(14,116,144,.13);
     transform:translateY(-1px)}
   .pick-n{font-weight:650;color:var(--text);font-size:15px}
@@ -89,40 +76,6 @@ router.get("/signin", (req, res) => {
   <div class="picks">${cards}</div>
 </div>`);
 });
-// One click from the picker to a signed-in session. Cognito issues the tokens;
-// this only supplies the shared demo password so nobody types it on stage.
-//
-// The allowlist is the control that matters here: without it this route would
-// mint a session for ANY address that happens to share the demo password, which
-// is a materially bigger hole than "the five faces on the picker".
-router.post("/auth/demo", express.urlencoded({ extended: false }), async (req, res) => {
-  const email = String((req.body && req.body.email) || "").trim().toLowerCase();
-  if (!PROFILES.some((p) => p.email.toLowerCase() === email)) {
-    return res.status(400).send("Unknown clinician. <a href='/healthsphere/signin'>Back</a>");
-  }
-  try {
-    const tokens = await auth.passwordSignIn(email);
-    const claims = await auth.verifyIdToken(tokens.id_token);
-    req.session.hsUser = auth.userFromClaims(claims);
-    req.session.hsTokens = { accessToken: tokens.access_token, idToken: tokens.id_token };
-    console.log("[auth] one-click sign-in: " + email);
-    res.redirect("/healthsphere");
-  } catch (e) {
-    // Say what actually failed. The three realistic causes — no
-    // HS_DEMO_PASSWORD, neither auth flow permitted, a Cognito challenge — are
-    // all configuration, and "sign-in failed" sends someone hunting the wrong one.
-    console.warn("[auth] one-click sign-in failed for " + email + ": " + e.message);
-    res.status(500).type("html").send(
-      "<p>Could not sign in as " + email + ".</p><pre>" + e.message + "</pre>"
-      + "<p>This is a configuration problem. Check HS_DEMO_PASSWORD, and that the "
-      + "app client allows ALLOW_USER_PASSWORD_AUTH or the backend role has "
-      + "cognito-idp:AdminInitiateAuth.</p>"
-      + "<p><a href='/healthsphere/signin'>Back to the picker</a> · "
-      + "<a href='/healthsphere/auth/login?hint=" + encodeURIComponent(email)
-      + "'>Use the Cognito login page instead</a></p>");
-  }
-});
-
 router.get("/auth/callback", async (req, res) => {
   try {
     const { code, state } = req.query;
