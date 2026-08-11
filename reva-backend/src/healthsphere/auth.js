@@ -18,6 +18,16 @@ const cfg = {
     || "https://healthsphere-agentic-wep2.onrender.com/healthsphere/signin",
 };
 
+// Derived from the issuer rather than configured separately: the issuer URL
+// ends in the pool id, so two settings that must agree become one that cannot
+// disagree.
+cfg.userPoolId = (process.env.COGNITO_USER_POOL_ID
+  || String(cfg.issuer).split("/").filter(Boolean).pop() || "").trim();
+
+// Shared password for the one-click clinician picker. Every demo user has the
+// same one, so nobody types it — see passwordSignIn below.
+cfg.demoPassword = process.env.HS_DEMO_PASSWORD || "";
+
 const b64url = (buf) => buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
 function pkce() {
@@ -54,6 +64,68 @@ async function exchangeCode(code, verifier) {
   if (!res.ok) throw new Error(`token exchange ${res.status}: ${await res.text()}`);
   return res.json();
 }
+/* One-click sign-in for the clinician picker.
+ *
+ * Cognito's hosted UI has no password parameter — there is none and there
+ * should not be — so `login_hint` could only ever prefill the email and the
+ * password page still had to be dealt with. This authenticates against Cognito
+ * directly instead, with the shared demo password, and returns the same token
+ * pair the authorization-code flow returns.
+ *
+ * The tokens are REAL Cognito JWTs. That is the point, and it is why this does
+ * not mint its own: the entry hop sends the access token to the PDP for
+ * validation and the topology keys User entities by the `sub` claim, so a
+ * locally-signed token would be rejected and would read as a policy denial.
+ *
+ * Two flows, tried in order, because which one is available depends on how the
+ * pool was set up and getting it wrong is a confusing failure:
+ *   USER_PASSWORD_AUTH        needs ALLOW_USER_PASSWORD_AUTH on the app client,
+ *                             needs no AWS credentials.
+ *   ADMIN_USER_PASSWORD_AUTH  needs cognito-idp:AdminInitiateAuth on the
+ *                             backend's role, needs no client change.
+ *
+ * This is a demo affordance and a bypass: anyone who can reach the picker can
+ * sign in as any listed clinician. It is not an authentication control. What it
+ * does preserve is that the APP never asserts who it is acting for — Cognito
+ * still issues the tokens, and every downstream identity claim comes from them.
+ */
+async function passwordSignIn(email) {
+  if (!cfg.demoPassword) {
+    throw new Error("HS_DEMO_PASSWORD is not set — one-click sign-in is disabled.");
+  }
+  const {
+    CognitoIdentityProviderClient, InitiateAuthCommand, AdminInitiateAuthCommand,
+  } = require("@aws-sdk/client-cognito-identity-provider");
+
+  const region = String(cfg.issuer).split("/")[2].split(".")[1] || "us-west-2";
+  const client = new CognitoIdentityProviderClient({ region });
+  const AuthParameters = { USERNAME: email, PASSWORD: cfg.demoPassword };
+
+  let res;
+  try {
+    res = await client.send(new InitiateAuthCommand({
+      ClientId: cfg.clientId, AuthFlow: "USER_PASSWORD_AUTH", AuthParameters,
+    }));
+  } catch (e) {
+    console.warn("[auth] USER_PASSWORD_AUTH unavailable (" + e.name + "), trying admin flow");
+    res = await client.send(new AdminInitiateAuthCommand({
+      UserPoolId: cfg.userPoolId, ClientId: cfg.clientId,
+      AuthFlow: "ADMIN_USER_PASSWORD_AUTH", AuthParameters,
+    }));
+  }
+
+  // A challenge means Cognito wants something more (a new password, MFA). That
+  // cannot be answered from a one-click picker, so say which challenge it is
+  // rather than failing with an empty token.
+  if (!res.AuthenticationResult) {
+    throw new Error(`Cognito returned a challenge (${res.ChallengeName || "unknown"}) for ${email}.`);
+  }
+  return {
+    id_token: res.AuthenticationResult.IdToken,
+    access_token: res.AuthenticationResult.AccessToken,
+  };
+}
+
 async function verifyIdToken(idToken) {
   const jose = await import("jose"); // dynamic import — jose is ESM, reva-backend is CJS
   const jwks = jose.createRemoteJWKSet(new URL(`${cfg.issuer}/.well-known/jwks.json`));
@@ -80,4 +152,5 @@ function userFromClaims(payload) {
   };
 }
 
-module.exports = { cfg, pkce, randomState, authorizeUrl, logoutUrl, exchangeCode, verifyIdToken, userFromClaims };
+module.exports = { cfg, pkce, randomState, authorizeUrl, logoutUrl, exchangeCode,
+                   passwordSignIn, verifyIdToken, userFromClaims };
