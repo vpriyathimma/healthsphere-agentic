@@ -94,9 +94,9 @@ Carried only on the **direct evaluation**. `proxy.mcp`'s enrich envelope has no
 context passthrough, so a verdict sent only through the SDK path is invisible
 to Cedar and a rejection would be silently ignored.
 
-The approval is also recorded as a **hop** (`approveAction` / `rejectAction`,
-resource type `Approval`) so the decision log shows who decided, not just what
-happened.
+The approval is **not** recorded as a separate hop — see deviation 4. Who
+decided is carried on the tool hop's own decision, in the context attributes
+above, and nowhere else.
 
 ---
 
@@ -125,3 +125,10 @@ scenario before the risky action it exists to demonstrate.
 3. **Maker-checker is off.** The spec requires approver ≠ requester; the later
    instruction was that anyone in the channel may approve, including the
    requester. Controlled by `HS_HITL_MAKER_CHECKER`.
+4. **The approval is not a hop in the decision log.** An earlier draft of this
+   file said the agent records `approveAction` / `rejectAction` against an
+   `Approval` resource. It does not, and there is no plan to. The verdict, the
+   approver and the approval id all reach the PDP as context attributes on the
+   tool hop's direct evaluation, which is what the forbid policy reads; a second
+   entity and a second decision would add a row to the log without adding a
+   control. Read the approver off the tool hop, not off a hop of its own.
