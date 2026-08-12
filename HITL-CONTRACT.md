@@ -82,12 +82,13 @@ forbid — not the application — is what stopped it.
 
 | | |
 |---|---|
-| `hitl.status` | `HSNewApp_hitl_status` in Cedar `context` |
-| `hitl.approver` | `HSNewApp_hitl_approver` |
-| `hitl.approval_id` | `HSNewApp_hitl_approval_id` |
+| `hitl.status` | `HealthsphereClinicalApp_hitl_status` in Cedar `context` |
+| `hitl.approver` | `HealthsphereClinicalApp_hitl_approver` |
+| `hitl.approval_id` | `HealthsphereClinicalApp_hitl_approval_id` |
 
 The prefix comes from the policy store's application name and is set by
-`HITL_ATTR_PREFIX`. **Change the store's app name and this changes**, and a
+`HITL_ATTR_PREFIX`, derived from the store name by stripping spaces and
+underscores. **Change the store's name and this changes**, and a
 mismatch produces no error — the forbid simply never matches.
 
 Carried only on the **direct evaluation**. `proxy.mcp`'s enrich envelope has no
