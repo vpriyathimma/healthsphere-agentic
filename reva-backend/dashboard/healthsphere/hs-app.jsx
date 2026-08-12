@@ -13,11 +13,27 @@ const hsApi = {
     if (!r.ok) throw new Error(r.status + " " + (await r.text()));
     return r.json();
   },
-  async post(p, body) {
-    const r = await fetch(p, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
-    if (r.status === 401) { window.location.href = "/healthsphere/auth/login"; throw new Error("401"); }
-    if (!r.ok) throw new Error(r.status + " " + (await r.text()));
-    return r.json();
+  // `timeoutMs` because a browser's own fetch timeout is not ours to rely on and
+  // not the same in every browser. Safari gave up on a turn the agent was still
+  // working on and reported "Load failed" — a network-level failure, with no
+  // status and nothing in any server log, for a request that later succeeded.
+  // An explicit AbortController makes the limit ours, and makes exceeding it say
+  // so instead of looking like the connection broke.
+  async post(p, body, opts) {
+    const timeoutMs = (opts && opts.timeoutMs) || 30000;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(p, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}), signal: ctrl.signal });
+      if (r.status === 401) { window.location.href = "/healthsphere/auth/login"; throw new Error("401"); }
+      if (!r.ok) throw new Error(r.status + " " + (await r.text()));
+      return r.json();
+    } catch (e) {
+      if (e.name === "AbortError") {
+        throw new Error("the assistant is taking longer than " + Math.round(timeoutMs / 1000) + "s. It may still be working \u2014 check the orders list before retrying, so nothing is placed twice.");
+      }
+      throw e;
+    } finally { clearTimeout(timer); }
   },
   async logout() {
     const { logoutUrl } = await this.post("/healthsphere/auth/logout");
@@ -135,12 +151,24 @@ function Assistant({ context, onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Seconds spent waiting on the current turn. Three animated dots say "not
+  // frozen" for about ten seconds and then start to look like one; a turn here
+  // can run the better part of a minute because every step of it is authorized
+  // before it happens. Saying so is the difference between waiting and
+  // wondering whether to hit Send again — and hitting Send again on a turn that
+  // places orders is the expensive mistake.
+  const [waited, setWaited] = useState(0);
   const threadRef = useRef(null);
   // Bumped by "New session". An approval poll started in an earlier session can
   // still be running — it retries for ~5 minutes — and without this it would
   // append "Approved by..." into a conversation that has already been cleared.
   const genRef = useRef(0);
   useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [messages, busy]);
+  useEffect(() => {
+    if (!busy) { setWaited(0); return; }
+    const t = setInterval(() => setWaited((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
 
   const send = async () => {
     const text = input.trim();
@@ -148,7 +176,11 @@ function Assistant({ context, onClose }) {
     setMessages((m) => m.concat({ role: "user", text }));
     setInput(""); setBusy(true);
     try {
-      const a = await hsApi.post("/healthsphere/api/agent/ask", { prompt: text, patientId: context ? context.id : null });
+      // Three minutes. A multi-step turn — delegate, read the chart, place and
+      // sign each order — has been measured at 25-55s, every step of it
+      // authorized, and a cold runtime adds to that. The ceiling is deliberately
+      // far above the worst observed rather than close to it.
+      const a = await hsApi.post("/healthsphere/api/agent/ask", { prompt: text, patientId: context ? context.id : null }, { timeoutMs: 180000 });
 
       // The action needs a second clinician. Nothing has run — show what is
       // being waited on and poll until someone decides, in the app or in Slack.
@@ -241,6 +273,12 @@ function Assistant({ context, onClose }) {
           </div>
         ))}
         {busy && <div className="msg assistant typing"><span></span><span></span><span></span></div>}
+        {busy && waited >= 8 &&
+          <div style={{ fontSize: 12, opacity: 0.6, margin: "2px 0 8px 4px" }}>
+            {waited < 20 ? "Working on it\u2026"
+              : waited < 45 ? "Still working \u2014 this one has several steps."
+              : "Still working (" + waited + "s). Longer requests check each step before it runs."}
+          </div>}
       </div>
       <div className="a-input">
         <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey}
