@@ -62,7 +62,8 @@ function extractText(raw) {
   return out.trim();
 }
 
-async function invokeAgent({ user, traceId, target, prompt, bearer, actor, idToken }) {
+async function invokeAgent({ user, traceId, target, prompt, bearer, actor, idToken,
+                             chatId, chatStartedAt, turn, sessionMessages }) {
   // The LangGraph three-agent orchestration is deployed as AgentCore runtimes
   // rather than gateway targets, so there is no target name to route to. When
   // HS_SUPERVISOR_ARN is set, go straight to the supervisor and let it delegate
@@ -71,7 +72,15 @@ async function invokeAgent({ user, traceId, target, prompt, bearer, actor, idTok
     // bearer is the signed-in user's access token. The Reva SDK reads the
     // principal claim from it, so the agent needs the token itself, not just
     // the actor fields derived from it.
-    return runtime.invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken });
+    // Session fields forwarded explicitly. This wrapper destructures a fixed
+    // set of names, so anything routes.js starts sending is dropped here unless
+    // it is named — silently, because the argument below is an object literal
+    // and a missing key is only ever undefined. That is exactly what happened
+    // to chatId: the browser sent it, routes.js passed it, and it disappeared
+    // one hop before the runtime, which then fell back to the per-message trace
+    // id and gave every message its own session.
+    return runtime.invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
+                                      chatId, chatStartedAt, turn, sessionMessages });
   }
 
   const t = target || gw.supervisorTarget;
