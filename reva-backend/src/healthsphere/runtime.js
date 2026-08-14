@@ -65,7 +65,7 @@ function extractText(data) {
 
 async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
                                   sessionId: sessionIdOverride, hitl,
-                                  chatId, turn, sessionMessages }) {
+                                  chatId, chatStartedAt, turn, sessionMessages }) {
   // On a replay the session id comes from the approval record rather than
   // being recomputed. sessionIdFor pads and truncates, so recomputing invites
   // a mismatch that would quietly start a different session.
@@ -103,6 +103,7 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
             // guardrail judges against, rather than one message in isolation.
             // The agent caps and truncates before anything reaches the PDP.
             turn: turn || 1,
+            session_started_at: chatStartedAt || "",
             session_messages: Array.isArray(sessionMessages) ? sessionMessages : [],
             user_access_token: bearer || "",
             user_token: idToken || bearer || "",

@@ -180,6 +180,10 @@ function Assistant({ context, onClose }) {
   // Reset by "New session", which is what a clinician understands as starting
   // over.
   const chatIdRef = useRef(newChatId());
+  // When this chat began. session.startedAt, and the PDP refuses a session
+  // whose first message predates its own start — so it has to be the chat's
+  // start, not the current turn's.
+  const chatStartRef = useRef(new Date().toISOString());
   // Prior turns, as the evaluation contract wants them: request in, response
   // out. Kept here because the browser is the only place that sees the whole
   // chat — the agent is stateless by design and its runtimes are per-turn.
@@ -205,6 +209,7 @@ function Assistant({ context, onClose }) {
         prompt: text,
         patientId: context ? context.id : null,
         chatId: chatIdRef.current,
+        chatStartedAt: chatStartRef.current,
         turn: turnsRef.current.length + 1,
         // Earlier turns of this chat. The agent caps and truncates these before
         // they reach the PDP; sending them raw keeps the trimming rule in one
@@ -283,6 +288,7 @@ function Assistant({ context, onClose }) {
   const newSession = () => {
     genRef.current += 1;
     chatIdRef.current = newChatId();
+    chatStartRef.current = new Date().toISOString();
     turnsRef.current = [];
     setMessages([]);
     setInput("");

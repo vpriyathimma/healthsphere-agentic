@@ -117,7 +117,7 @@ router.get("/api/patients/:id", apiGuard, (req, res) => {
 router.post("/api/agent/ask", apiGuard, async (req, res) => {
   const user = req.session.hsUser;
   const traceId = newTraceId();
-  const { prompt, patientId, chatId, turn, sessionMessages } = req.body || {};
+  const { prompt, patientId, chatId, chatStartedAt, turn, sessionMessages } = req.body || {};
   // When a chart is open, pass the patient id as context so the agent can look it up.
   const fullPrompt = patientId ? (prompt || "") + "\n\n[Patient in context: " + patientId + "]" : (prompt || "");
   const _c = (typeof clinicianFor === "function") ? clinicianFor(user.email) : {};
@@ -126,7 +126,7 @@ router.post("/api/agent/ask", apiGuard, async (req, res) => {
     user, traceId, prompt: fullPrompt, actor,
     // The chat this message belongs to. One chat is one runtime session, so
     // consecutive turns are recognisably the same conversation downstream.
-    chatId, turn, sessionMessages,
+    chatId, chatStartedAt, turn, sessionMessages,
     bearer: req.session.hsTokens && req.session.hsTokens.accessToken, // user's Cognito token → gateway inbound
     // The ID token, not the access token, for the PDP. Cognito access tokens
     // carry token_use:"access" and no user claims; ID tokens carry the claims
