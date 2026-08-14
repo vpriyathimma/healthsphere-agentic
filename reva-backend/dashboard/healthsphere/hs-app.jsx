@@ -6,6 +6,15 @@
 
 const { useState, useEffect, useRef } = React;
 
+function newChatId() {
+  // crypto.randomUUID is not available on every browser/origin combination the
+  // workspace is opened from; the fallback only has to be unique per browser
+  // tab, not unguessable.
+  try { return crypto.randomUUID(); } catch (_) {
+    return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+}
+
 const hsApi = {
   async get(p) {
     const r = await fetch(p, { credentials: "include" });
@@ -163,6 +172,18 @@ function Assistant({ context, onClose }) {
   // still be running — it retries for ~5 minutes — and without this it would
   // append "Approved by..." into a conversation that has already been cleared.
   const genRef = useRef(0);
+  // One chat = one session. Until now every message derived its own runtime
+  // session id from a fresh trace id, so `session.turn` was always 1 and
+  // `session.id` never repeated — which makes the session block meaningless,
+  // since a trajectory needs the turns to be recognisably the same chat.
+  //
+  // Reset by "New session", which is what a clinician understands as starting
+  // over.
+  const chatIdRef = useRef(newChatId());
+  // Prior turns, as the evaluation contract wants them: request in, response
+  // out. Kept here because the browser is the only place that sees the whole
+  // chat — the agent is stateless by design and its runtimes are per-turn.
+  const turnsRef = useRef([]);
   useEffect(() => { if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight; }, [messages, busy]);
   useEffect(() => {
     if (!busy) { setWaited(0); return; }
@@ -180,7 +201,16 @@ function Assistant({ context, onClose }) {
       // sign each order — has been measured at 25-55s, every step of it
       // authorized, and a cold runtime adds to that. The ceiling is deliberately
       // far above the worst observed rather than close to it.
-      const a = await hsApi.post("/healthsphere/api/agent/ask", { prompt: text, patientId: context ? context.id : null }, { timeoutMs: 180000 });
+      const a = await hsApi.post("/healthsphere/api/agent/ask", {
+        prompt: text,
+        patientId: context ? context.id : null,
+        chatId: chatIdRef.current,
+        turn: turnsRef.current.length + 1,
+        // Earlier turns of this chat. The agent caps and truncates these before
+        // they reach the PDP; sending them raw keeps the trimming rule in one
+        // place rather than splitting it across two deployments.
+        sessionMessages: turnsRef.current,
+      }, { timeoutMs: 180000 });
 
       // The action needs a second clinician. Nothing has run — show what is
       // being waited on and poll until someone decides, in the app or in Slack.
@@ -192,6 +222,16 @@ function Assistant({ context, onClose }) {
 
       const reply = a.reply || "(no response)";
       setMessages((m) => m.concat({ role: "assistant", text: reply }));
+      // The turn is complete, so it becomes history for the next one. A turn
+      // that failed or is still pending approval is deliberately not recorded:
+      // a trajectory should be what actually happened, not what was attempted.
+      turnsRef.current = turnsRef.current.concat({
+        turn: turnsRef.current.length + 1,
+        request: { role: "user", contentType: "text/plain", content: text,
+                   timestamp: new Date().toISOString() },
+        response: { role: "assistant", contentType: "text/plain", content: reply,
+                    timestamp: new Date().toISOString() },
+      });
     } catch (e) {
       setMessages((m) => m.concat({ role: "assistant", text: "Error: " + e.message }));
     } finally { setBusy(false); }
@@ -242,6 +282,8 @@ function Assistant({ context, onClose }) {
   // clinician can see, and invalidates any approval poll still running.
   const newSession = () => {
     genRef.current += 1;
+    chatIdRef.current = newChatId();
+    turnsRef.current = [];
     setMessages([]);
     setInput("");
     setBusy(false);

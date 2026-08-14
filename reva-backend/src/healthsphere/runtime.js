@@ -35,8 +35,17 @@ function enabled() {
 
 // AgentCore rejects session ids under 33 characters. Derive one from the trace
 // id so a conversation stays on the same runtime session, and pad if short.
-function sessionIdFor(traceId, user) {
-  let sid = `hs-${traceId || ""}-${(user && user.sub) || "anon"}`.replace(/[^a-zA-Z0-9_-]/g, "");
+// One chat = one runtime session. The first argument used to be a per-message
+// trace id, which gave every message its own session: `session.turn` was always
+// 1 and no two turns of a conversation shared an id, so nothing downstream could
+// tell a trajectory from a first message. It is now the browser's chat id, reset
+// only by "New session".
+//
+// Still padded and truncated, and still not to be recomputed on a HITL replay —
+// the approval record stores the id it was raised under and the resume must
+// reproduce it exactly.
+function sessionIdFor(chatOrTraceId, user) {
+  let sid = `hs-${chatOrTraceId || ""}-${(user && user.sub) || "anon"}`.replace(/[^a-zA-Z0-9_-]/g, "");
   while (sid.length < 33) sid += "0";
   return sid.slice(0, 64);
 }
@@ -55,11 +64,12 @@ function extractText(data) {
 }
 
 async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
-                                  sessionId: sessionIdOverride, hitl }) {
+                                  sessionId: sessionIdOverride, hitl,
+                                  chatId, turn, sessionMessages }) {
   // On a replay the session id comes from the approval record rather than
   // being recomputed. sessionIdFor pads and truncates, so recomputing invites
   // a mismatch that would quietly start a different session.
-  const sessionId = sessionIdOverride || sessionIdFor(traceId, user);
+  const sessionId = sessionIdOverride || sessionIdFor(chatId || traceId, user);
 
   console.log("[CALL]  app -> agentcore runtime (direct)");
   console.log("        arn        : " + SUPERVISOR_ARN);
@@ -88,6 +98,12 @@ async function invokeSupervisor({ user, traceId, prompt, actor, bearer, idToken,
             // is the credential the user actually presented. The ID token
             // carries the profile claims. Both are JWTs, so no external IdP is
             // required to satisfy the transaction-token flow.
+            // Which turn of this chat, and the turns before it. session.turn
+            // and session.messages in the evaluation payload: the trajectory a
+            // guardrail judges against, rather than one message in isolation.
+            // The agent caps and truncates before anything reaches the PDP.
+            turn: turn || 1,
+            session_messages: Array.isArray(sessionMessages) ? sessionMessages : [],
             user_access_token: bearer || "",
             user_token: idToken || bearer || "",
             // The approval verdict, when replaying after a decision. Absent on
