@@ -25,6 +25,11 @@ mismatch that would silently address a different session.
 Returned when a gated tool is reached and nobody has decided yet. **Nothing has
 been executed and no transaction token has been minted.**
 
+The fields are **flat**, not nested under `pending`, and the tool is named by
+`action` using its **bare** name — the name an MCP `tools/call` carries, not the
+suffixed entity id. This document said otherwise until 2026-08-15; both
+implementations always did it this way.
+
 ```json
 {
   "output": {
@@ -32,19 +37,34 @@ been executed and no transaction token has been minted.**
     "role": "supervisor"
   },
   "status": "pending_approval",
-  "pending": {
-    "tool": "patient_discharge_lg",
-    "arguments": { "mrn": "MRN-1004", "destination": "home" },
-    "display_message": "This action needs a second clinician to approve it before it can be carried out.",
-    "requester": "<cognito sub of the clinician who asked>",
-    "session_id": "<runtimeSessionId — the join key>",
-    "prompt": "<the user's original words>"
-  }
+  "action": "patient_discharge",
+  "arguments": { "mrn": "MRN-1004", "destination": "home" },
+  "display_message": "This action needs a second clinician to approve it before it can be carried out.",
+  "requester": "<cognito sub of the clinician who asked>",
+  "session_id": "<runtimeSessionId — the join key>",
+  "prompt": "<the user's original words>"
 }
 ```
 
 `display_message` is what a clinician sees. It never contains the words Cedar,
 PDP, Reva, policy store or governance.
+
+### When the gated tool belongs to a sub-agent
+
+`sign_order` is the supervisor's. `request_discharge` and `patient_discharge`
+belong to **admissions** — a different runtime, with its own request state.
+
+The gate therefore fires in one process and this block is emitted from another,
+so both directions have to cross the agent-to-agent call explicitly:
+
+| direction | what crosses | without it |
+|---|---|---|
+| up | the pending block, re-raised in the supervisor's request state | the supervisor answers with prose; no approval record, no Slack card |
+| down | `hitl` on the A2A payload | the approved action re-enters the sub-agent with no verdict and pends **again**, forever |
+
+Nothing about the app-facing shape changes — the supervisor emits exactly the
+block above either way. This is only a note that a gated tool moving between
+agents is a wire change, not a config change.
 
 ## 2. Resume — app to agent
 
