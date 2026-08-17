@@ -234,7 +234,13 @@ function Assistant({ context, onClose }) {
         turn: turnsRef.current.length + 1,
         request: { role: "user", contentType: "text/plain", content: text,
                    timestamp: new Date().toISOString() },
-        response: { role: "assistant", contentType: "text/plain", content: reply,
+        // "agent", the canonical token, NOT the "assistant" used for the chat
+        // bubbles above. This object is the PDP's session.messages, and there
+        // the speaker vocabulary is user / agent / tool across
+        // transmission.role, context.conversation and session.messages alike.
+        // The setMessages() calls elsewhere in this file are browser UI state
+        // and keep their own naming.
+        response: { role: "agent", contentType: "text/plain", content: reply,
                     timestamp: new Date().toISOString() },
       });
     } catch (e) {
